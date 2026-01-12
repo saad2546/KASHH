@@ -46,6 +46,16 @@ export default function Dashboard() {
     return { predictedOccupied: predicted, occupancyPercent: percent, occupancyStatus: status, timeframeLabel: label };
   }, [data, timeframe, totalBeds, currentOccupancy]);
 
+  // Summary KPIs
+  const { expectedAdmissions, expectedDischarges, netChange, peakHour, riskText } = useMemo(() => {
+    const expectedAdmissions = data.reduce((s, d) => s + d.admissions, 0);
+    const expectedDischarges = data.reduce((s, d) => s + d.discharges, 0);
+    const net = expectedAdmissions - expectedDischarges;
+    const peak = data.length ? data.reduce((p, d) => (d.admissions > p.admissions ? d : p), data[0]).time : "-";
+    const riskText = occupancyStatus === "critical" ? "🔴 High" : occupancyStatus === "watch" ? "🟡 Medium" : "🟢 Low";
+    return { expectedAdmissions, expectedDischarges, netChange: net, peakHour: peak, riskText };
+  }, [data, occupancyStatus]);
+
   return (
     <div className="dashboard-root">
       <header className="dashboard-header">
@@ -91,6 +101,29 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      <section className="kpi-row" aria-label="Summary metrics">
+        <div className="kpi-card">
+          <div className="kpi-title">Expected Admissions ({timeframe})</div>
+          <div className="kpi-value">{expectedAdmissions}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Expected Discharges ({timeframe})</div>
+          <div className="kpi-value">{expectedDischarges}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Net Patient Change</div>
+          <div className="kpi-value">{netChange >= 0 ? `+${netChange}` : netChange}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Peak Hour</div>
+          <div className="kpi-value">{peakHour}</div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-title">Risk Level</div>
+          <div className={`kpi-value risk-${occupancyStatus}`}>{riskText}</div>
+        </div>
+      </section>
 
       <main className="dashboard-chart">
         <ResponsiveContainer width="100%" height={450}>

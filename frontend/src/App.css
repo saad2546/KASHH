@@ -123,3 +123,31 @@
 }
 .occupancy-legend span { display:inline-flex; gap:0.25rem; align-items:center; }
 
+/* KPI row */
+.kpi-row {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.kpi-card {
+  flex: 1 1 180px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.04);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(16,24,40,0.03);
+}
+.kpi-title {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+}
+.kpi-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.kpi-value.risk-critical { color: #ef4444; }
+.kpi-value.risk-watch { color: #f59e0b; }
+.kpi-value.risk-safe { color: #10b981; }
+
