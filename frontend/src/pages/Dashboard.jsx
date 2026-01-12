@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -22,18 +22,14 @@ function formatLabel(iso, timeframe) {
 
 export default function Dashboard() {
   const [timeframe, setTimeframe] = useState("24h");
-  const [data, setData] = useState([]);
-
-  useEffect(() => {
-    // get mock forecast data
+  const data = useMemo(() => {
+    // get mock forecast data and map into recharts-friendly format
     const f = getForecast(timeframe);
-    // map into recharts-friendly format
-    const mapped = f.map((pt) => ({
+    return f.map((pt) => ({
       time: formatLabel(pt.time, timeframe),
       admissions: Math.round(pt.admissions),
       discharges: Math.round(pt.discharges),
     }));
-    setData(mapped);
   }, [timeframe]);
 
   return (
