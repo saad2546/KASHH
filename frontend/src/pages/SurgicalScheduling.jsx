@@ -4,11 +4,24 @@ import {
   BrainCircuit, 
   LayoutDashboard, 
   History, 
-  Settings 
+  Settings,
+  TrendingUp,
+  Clock
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line
+} from 'recharts';
 
-
-import MetricCard from '../components/MetricCard.jsx';
+import MetricCard from '../components/MetricCard';
 import SurgeryForm from '../components/SurgeryForm';
 import PendingQueue from '../components/PendingQueue';
 import OptimizedSchedule from '../components/OptimizedSchedule';
@@ -24,12 +37,54 @@ const SurgicalScheduling = () => {
   ]);
 
   // State for the Optimized Schedule (Outputs from Backend)
-  // In a real scenario, this would be updated after calling your FastAPI endpoint
   const [optimizedData, setOptimizedData] = useState([
     { time: "08:00", patient: "Sarah Connor", surgeon: "Dr. Smith", room: "OR-1", duration: 120 },
     { time: "09:30", patient: "Kyle Reese", surgeon: "Dr. Varma", room: "OR-2", duration: 45 },
     { time: "10:15", patient: "Ellen Ripley", surgeon: "Dr. Smith", room: "OR-1", duration: 90 },
   ]);
+
+  // Efficiency Comparison Data (Before AI vs After AI)
+  const efficiencyData = [
+    {
+      metric: 'OR Utilization',
+      before: 68.5,
+      after: 84.2,
+      unit: '%'
+    },
+    {
+      metric: 'Avg Turnover Time',
+      before: 45,
+      after: 28,
+      unit: 'min'
+    },
+    {
+      metric: 'Cases Per Day',
+      before: 12,
+      after: 16,
+      unit: 'cases'
+    },
+    {
+      metric: 'Idle Time',
+      before: 125,
+      after: 62,
+      unit: 'min'
+    },
+    {
+      metric: 'Staff Overtime',
+      before: 18,
+      after: 7,
+      unit: '%'
+    }
+  ];
+
+  // Weekly Trend Data
+  const weeklyTrendData = [
+    { day: 'Mon', utilization: 76, conflicts: 3 },
+    { day: 'Tue', utilization: 79, conflicts: 2 },
+    { day: 'Wed', utilization: 82, conflicts: 1 },
+    { day: 'Thu', utilization: 84, conflicts: 0 },
+    { day: 'Fri', utilization: 85, conflicts: 0 },
+  ];
 
   const handleDeleteFromQueue = (id) => {
     setPendingSurgeries(pendingSurgeries.filter(s => s.id !== id));
@@ -38,6 +93,12 @@ const SurgicalScheduling = () => {
   const handleRunOptimization = () => {
     console.log("Triggering Backend API for Optimization...");
     // Here your team will add the fetch/axios call to FastAPI
+  };
+
+  // Calculate improvement percentages
+  const calculateImprovement = (before, after) => {
+    const improvement = ((after - before) / before * 100).toFixed(1);
+    return improvement > 0 ? `+${improvement}%` : `${improvement}%`;
   };
 
   return (
@@ -146,15 +207,87 @@ const SurgicalScheduling = () => {
             <OptimizedSchedule data={optimizedData} />
           </div>
 
-          {/* Efficiency Comparison Chart Placeholder */}
-          <div className="mt-8 p-6 bg-white border border-slate-200 rounded-xl">
-             <div className="flex justify-between mb-4">
-                <h3 className="font-bold text-slate-800">Efficiency Improvement (Before vs. After AI)</h3>
-                <Settings size={16} className="text-slate-400" />
-             </div>
-             <div className="h-48 bg-slate-50 border-2 border-dashed border-slate-100 rounded flex items-center justify-center text-slate-400">
-                [ Chart Module: Recharts/Chart.js Integration Point ]
-             </div>
+          {/* EFFICIENCY COMPARISON CHART */}
+          <div className="mt-8 p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp size={20} className="text-green-600" />
+                  <h3 className="font-bold text-slate-800 text-lg">Performance Metrics</h3>
+                </div>
+                <p className="text-sm text-slate-500">Before AI vs. After AI Optimization</p>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
+                <span className="text-green-700 font-bold text-sm">+23% Overall Improvement</span>
+              </div>
+            </div>
+            
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart 
+                data={efficiencyData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="metric" 
+                  tick={{ fontSize: 12, fill: '#64748b' }}
+                  axisLine={{ stroke: '#e2e8f0' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: '#64748b' }}
+                  axisLine={{ stroke: '#e2e8f0' }}
+                />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value, name) => [
+                    `${value}${efficiencyData.find(d => d.before === value || d.after === value)?.unit || ''}`,
+                    name === 'before' ? 'Before AI' : 'After AI'
+                  ]}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '20px' }}
+                  formatter={(value) => value === 'before' ? 'Before AI' : 'After AI'}
+                />
+                <Bar 
+                  dataKey="before" 
+                  fill="#94a3b8" 
+                  radius={[8, 8, 0, 0]}
+                  name="before"
+                />
+                <Bar 
+                  dataKey="after" 
+                  fill="#2563eb" 
+                  radius={[8, 8, 0, 0]}
+                  name="after"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+
+            {/* Key Improvements Summary */}
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock size={16} className="text-blue-600" />
+                  <span className="text-xs font-bold text-blue-600 uppercase">Time Saved</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-700">63 min</p>
+                <p className="text-xs text-blue-600">Per OR per day</p>
+              </div>
+              
+              <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <LayoutDashboard size={16} className="text-purple-600" />
+                  <span className="text-xs font-bold text-purple-600 uppercase">Capacity Gain</span>
+                </div>
+                <p className="text-2xl font-bold text-purple-700">+33%</p>
+                <p className="text-xs text-purple-600">More cases per week</p>
+              </div>
+            </div>
           </div>
         </main>
         
