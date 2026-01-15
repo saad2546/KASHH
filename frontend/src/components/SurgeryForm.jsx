@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { PlusCircle } from "lucide-react";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/firebase";
+import { toast } from "sonner";
 
 const SurgeryForm = () => {
   const [formData, setFormData] = useState({
@@ -11,20 +14,22 @@ const SurgeryForm = () => {
   });
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log(formData);
-    setFormData({
-      patientName: "",
-      surgeon: "Dr. Smith (Cardiology)",
-      duration: "",
-      scheduledDate: "",
-      scheduledTime: "09:00",
+
+    await addDoc(collection(db, "surgery_requests"), {
+      ...formData,
+      duration_minutes: Number(formData.duration_minutes),
+      priority: "Normal",
+      status: "pending",
+      createdAt: serverTimestamp(),
     });
+
+    toast.success("Surgery added to queue");
+    setFormData({ ...formData, patient_name: "", duration_minutes: "" });
   };
 
   return (

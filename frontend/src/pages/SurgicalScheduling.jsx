@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   RefreshCcw,
   BrainCircuit,
@@ -17,6 +17,18 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  addDoc,
+  serverTimestamp,
+  doc, 
+  deleteDoc
+} from "firebase/firestore";
+import { db } from "@/firebase";
+import { toast } from "sonner";
 
 import MetricCard from '../components/MetricCard';
 import SurgeryForm from '../components/SurgeryForm';
@@ -24,17 +36,58 @@ import PendingQueue from '../components/PendingQueue';
 import OptimizedSchedule from '../components/OptimizedSchedule';
 
 const SurgicalScheduling = () => {
-  const [pendingSurgeries, setPendingSurgeries] = useState([
-    { id: 1, patient: "Sarah Connor", surgeon: "Dr. Smith", duration: 120, priority: "Urgent" },
-    { id: 2, patient: "Kyle Reese", surgeon: "Dr. Varma", duration: 45, priority: "Elective" },
-    { id: 3, patient: "Ellen Ripley", surgeon: "Dr. Smith", duration: 90, priority: "Normal" },
-  ]);
 
-  const [optimizedData] = useState([
-    { time: "08:00", patient: "Sarah Connor", surgeon: "Dr. Smith", room: "OR-1", duration: 120 },
-    { time: "09:30", patient: "Kyle Reese", surgeon: "Dr. Varma", room: "OR-2", duration: 45 },
-    { time: "10:15", patient: "Ellen Ripley", surgeon: "Dr. Smith", room: "OR-1", duration: 90 },
-  ]);
+  const [pendingSurgeries, setPendingSurgeries] = useState([]);
+  const [optimizedData, setOptimizedData] = useState([]);
+
+  useEffect(() => {
+  const q = query(
+    collection(db, "surgery_requests"),
+    where("status", "==", "pending")
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+  const surgeries = snapshot.docs.map(doc => {
+    const data = doc.data();
+    return {
+      id: doc.id,
+      patient: data.patient_name,
+      surgeon: data.surgeon,
+      duration: data.duration_minutes,
+      priority: data.priority || "Normal",
+      scheduled_start_time: data.scheduled_start_time
+    };
+  });
+
+  setPendingSurgeries(surgeries);
+});
+
+  return () => unsubscribe();
+}, []);
+
+  const runOptimizer = async () => {
+    const response = await fetch("http://localhost:5000/api/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        surgeries: pendingSurgeries.map((s) => ({
+          id: s.id,
+          patient_name: s.patient_name,
+          surgeon: s.surgeon,
+          duration_minutes: s.duration_minutes,
+          scheduled_start_time: s.scheduled_start_time,
+        })),
+      }),
+    });
+
+    const data = await response.json();
+    setOptimizedData(data.optimized_schedule);
+
+    await addDoc(collection(db, "optimized_schedules"), {
+      generatedAt: serverTimestamp(),
+      schedule: data.optimized_schedule,
+    });
+  };
 
   const efficiencyData = [
     { metric: 'OR Utilization', before: 68.5, after: 84.2 },
@@ -44,9 +97,10 @@ const SurgicalScheduling = () => {
     { metric: 'Staff Overtime', before: 18, after: 7 }
   ];
 
-  const handleDeleteFromQueue = (id) => {
-    setPendingSurgeries(pendingSurgeries.filter(s => s.id !== id));
-  };
+  const handleDeleteFromQueue = async (id) => {
+  await deleteDoc(doc(db, "surgery_requests", id));
+  toast.success("Removed from queue");
+};
 
   return (
     <div className="min-h-screen w-full bg-slate-50 p-6 space-y-8">
@@ -54,12 +108,6 @@ const SurgicalScheduling = () => {
         {/* HEADER */}
       <header className="flex justify-between items-end mt-10 mb-8">
         <div>
-          {/* <div className="flex items-center gap-2 mb-1">
-            <LayoutDashboard size={18} className="text-blue-600" />
-            <span className="text-xs font-bold uppercase tracking-widest text-blue-600">
-              Operations Hub
-            </span>
-          </div> */}
 
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
             Surgical Schedule <span className="text-blue-600">Optimization</span>
@@ -76,7 +124,7 @@ const SurgicalScheduling = () => {
             Logs
           </button>
 
-          <button className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg">
+          <button onClick={runOptimizer} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700 transition shadow-lg">
             <RefreshCcw size={18} />
             Re-run Optimizer
           </button>

@@ -7,11 +7,13 @@ import Navbar from "./components/Navbar";
 import ProtectedRoutes from './routes/ProtectedRoutes';
 import LandingPage from './pages/Landing';
 import Register from './pages/Register';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
     <Router>
       <Navbar />
+      <Toaster richColors position="bottom-right" />
 
       <Routes>
         {/* Public Routes */}

@@ -37,7 +37,7 @@ export default function Dashboard() {
       formData.append("file", file);
       formData.append("horizon", timeframe);
 
-      const response = await fetch("http://localhost:5000/api/forecast", {
+      const response = await fetch("http://localhost:5000/api/predict-patient-flow", {
         method: "POST",
         body: formData,
       });
@@ -90,7 +90,50 @@ export default function Dashboard() {
       return { predictedOccupied: predicted, occupancyPercent: percent, occupancyStatus: status, timeframeLabel: label };
     }, [data, timeframe]);
 
-  const { expectedAdmissions, expectedDischarges, netChange, peakHour, riskText } =
+  const {
+  expectedAdmissions,
+  expectedDischarges,
+  netChange,
+  netLabel,
+  netColor,
+  peakHour,
+  riskText,
+} = useMemo(() => {
+  const a = data.reduce((s, d) => s + d.admissions, 0);
+  const d = data.reduce((s, d) => s + d.discharges, 0);
+  const net = a - d;
+
+  const peak =
+    data.length > 0
+      ? data.reduce((p, c) => (c.admissions > p.admissions ? c : p)).time
+      : "-";
+
+  return {
+    expectedAdmissions: a,
+    expectedDischarges: d,
+    netChange: net,
+    netLabel:
+      net > 0
+        ? `+${net} (Growth)`
+        : net < 0
+        ? `${net} (Relief)`
+        : "0 (Stable)",
+    netColor:
+      net > 0
+        ? "text-red-600"
+        : net < 0
+        ? "text-green-600"
+        : "text-gray-600",
+    peakHour: peak,
+    riskText:
+      occupancyStatus === "critical"
+        ? "🔴 High"
+        : occupancyStatus === "watch"
+        ? "🟡 Medium"
+        : "🟢 Low",
+  };
+}, [data, occupancyStatus]);
+
     useMemo(() => {
       const a = data.reduce((s, d) => s + d.admissions, 0);
       const d = data.reduce((s, d) => s + d.discharges, 0);
@@ -205,16 +248,16 @@ export default function Dashboard() {
         {[
           ["Expected Admissions", expectedAdmissions],
           ["Expected Discharges", expectedDischarges],
-          ["Net Change", netChange >= 0 ? `+${netChange}` : netChange],
+          ["Net Change", netLabel, netColor],
           ["Peak Hour", peakHour],
           ["Risk Level", riskText],
-        ].map(([label, value]) => (
+        ].map(([label, value, color]) => (
           <div
             key={label}
             className="bg-white border rounded-lg p-4 text-center shadow-sm"
           >
             <div className="text-sm text-gray-500">{label}</div>
-            <div className="text-xl font-bold mt-1">{value}</div>
+            <div className={`text-xl font-bold mt-1 ${color || ""}`}>{value}</div>
           </div>
         ))}
       </section>
