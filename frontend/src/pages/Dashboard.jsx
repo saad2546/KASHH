@@ -22,15 +22,59 @@ function formatLabel(iso, timeframe) {
 
 export default function Dashboard() {
   const [timeframe, setTimeframe] = useState("24h");
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [forecastData, setForecastData] = useState(null);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFile(file);
+    setIsLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("horizon", timeframe);
+
+      // Replace with your actual backend URL
+      const response = await fetch("http://localhost:5000/api/forecast", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload file");
+      }
+
+      const result = await response.json();
+      setForecastData(result);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Error uploading file. Please check the console.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const data = useMemo(() => {
-    // get mock forecast data and map into recharts-friendly format
+    if (forecastData) {
+      // Use forecast data from API
+      return forecastData.map((pt) => ({
+        time: formatLabel(pt.timestamp, timeframe),
+        admissions: Math.round(pt.predicted_inflow),
+        discharges: Math.round(pt.predicted_outflow),
+      }));
+    }
+    // Fallback to mock forecast data
     const f = getForecast(timeframe);
     return f.map((pt) => ({
       time: formatLabel(pt.time, timeframe),
       admissions: Math.round(pt.admissions),
       discharges: Math.round(pt.discharges),
     }));
-  }, [timeframe]);
+  }, [timeframe, forecastData]);
 
   // Occupancy KPI (mock baseline values --- can be replaced by real data later)
   const totalBeds = 200; // default total beds
@@ -60,6 +104,40 @@ export default function Dashboard() {
     <div className="dashboard-root">
       <header className="dashboard-header">
         <h1>Inflow vs Outflow Forecast</h1>
+        
+        {/* File Upload Section */}
+        <div className="file-upload-section" style={{ marginBottom: "1.5rem", padding: "1rem", backgroundColor: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: "0.5rem" }}>
+          <label htmlFor="csv-upload" style={{ display: "block", fontWeight: "600", marginBottom: "0.5rem", color: "#0369a1" }}>
+            Upload CSV Data (timestamp, inflow, outflow)
+          </label>
+          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <input
+              id="csv-upload"
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              disabled={isLoading}
+              style={{
+                flex: 1,
+                padding: "0.5rem",
+                border: "1px solid #cbd5e1",
+                borderRadius: "0.375rem",
+                fontSize: "0.875rem",
+              }}
+            />
+            {uploadedFile && (
+              <span style={{ fontSize: "0.875rem", color: "#059669" }}>
+                ✓ {uploadedFile.name}
+              </span>
+            )}
+            {isLoading && (
+              <span style={{ fontSize: "0.875rem", color: "#0ea5e9" }}>
+                Loading...
+              </span>
+            )}
+          </div>
+        </div>
+        
         <div className="timeframe-controls">
           <button
             className={`tf-btn ${timeframe === "24h" ? "active" : ""}`}
@@ -155,7 +233,7 @@ export default function Dashboard() {
 
       <footer className="dashboard-note">
         <p>
-          Showing <strong>{timeframe}</strong> forecast for number of patients (mocked data).
+          Showing <strong>{timeframe}</strong> forecast {forecastData ? "from uploaded data" : "with mocked data"}.
         </p>
       </footer>
     </div>
