@@ -10,7 +10,6 @@ import {
   CartesianGrid,
 } from "recharts";
 import getForecast from "../lib/forecast";
-import "../App.css";
 
 function formatLabel(iso, timeframe) {
   const d = new Date(iso);
@@ -38,21 +37,17 @@ export default function Dashboard() {
       formData.append("file", file);
       formData.append("horizon", timeframe);
 
-      // Replace with your actual backend URL
       const response = await fetch("http://localhost:5000/api/forecast", {
         method: "POST",
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to upload file");
-      }
+      if (!response.ok) throw new Error("Upload failed");
 
       const result = await response.json();
       setForecastData(result);
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      alert("Error uploading file. Please check the console.");
+    } catch (err) {
+      alert("Upload failed");
     } finally {
       setIsLoading(false);
     }
@@ -60,155 +55,177 @@ export default function Dashboard() {
 
   const data = useMemo(() => {
     if (forecastData) {
-      // Use forecast data from API
       return forecastData.map((pt) => ({
         time: formatLabel(pt.timestamp, timeframe),
         admissions: Math.round(pt.predicted_inflow),
         discharges: Math.round(pt.predicted_outflow),
       }));
     }
-    // Fallback to mock forecast data
-    const f = getForecast(timeframe);
-    return f.map((pt) => ({
+    return getForecast(timeframe).map((pt) => ({
       time: formatLabel(pt.time, timeframe),
       admissions: Math.round(pt.admissions),
       discharges: Math.round(pt.discharges),
     }));
   }, [timeframe, forecastData]);
 
-  // Occupancy KPI (mock baseline values --- can be replaced by real data later)
-  const totalBeds = 200; // default total beds
-  const currentOccupancy = Math.round(totalBeds * 0.6); // mock current occupancy (60%)
+  const totalBeds = 200;
+  const currentOccupancy = Math.round(totalBeds * 0.6);
 
-  const { predictedOccupied, occupancyPercent, occupancyStatus, timeframeLabel } = useMemo(() => {
-    // net change over the selected timeframe
-    const net = data.reduce((acc, d) => acc + (d.admissions - d.discharges), 0);
-    const predicted = Math.max(0, Math.min(totalBeds, currentOccupancy + Math.round(net)));
-    const percent = Math.round((predicted / totalBeds) * 100);
-    const status = percent > 85 ? "critical" : percent >= 70 ? "watch" : "safe";
-    const label = timeframe === "24h" ? "Tomorrow" : timeframe === "72h" ? "Next 72 hours" : "Next 7 days";
-    return { predictedOccupied: predicted, occupancyPercent: percent, occupancyStatus: status, timeframeLabel: label };
-  }, [data, timeframe, totalBeds, currentOccupancy]);
+  const { predictedOccupied, occupancyPercent, occupancyStatus, timeframeLabel } =
+    useMemo(() => {
+      const net = data.reduce((a, d) => a + (d.admissions - d.discharges), 0);
+      const predicted = Math.max(
+        0,
+        Math.min(totalBeds, currentOccupancy + Math.round(net))
+      );
+      const percent = Math.round((predicted / totalBeds) * 100);
+      const status =
+        percent > 85 ? "critical" : percent >= 70 ? "watch" : "safe";
+      const label =
+        timeframe === "24h"
+          ? "Tomorrow"
+          : timeframe === "72h"
+          ? "Next 72 hours"
+          : "Next 7 days";
+      return { predictedOccupied: predicted, occupancyPercent: percent, occupancyStatus: status, timeframeLabel: label };
+    }, [data, timeframe]);
 
-  // Summary KPIs
-  const { expectedAdmissions, expectedDischarges, netChange, peakHour, riskText } = useMemo(() => {
-    const expectedAdmissions = data.reduce((s, d) => s + d.admissions, 0);
-    const expectedDischarges = data.reduce((s, d) => s + d.discharges, 0);
-    const net = expectedAdmissions - expectedDischarges;
-    const peak = data.length ? data.reduce((p, d) => (d.admissions > p.admissions ? d : p), data[0]).time : "-";
-    const riskText = occupancyStatus === "critical" ? "🔴 High" : occupancyStatus === "watch" ? "🟡 Medium" : "🟢 Low";
-    return { expectedAdmissions, expectedDischarges, netChange: net, peakHour: peak, riskText };
-  }, [data, occupancyStatus]);
+  const { expectedAdmissions, expectedDischarges, netChange, peakHour, riskText } =
+    useMemo(() => {
+      const a = data.reduce((s, d) => s + d.admissions, 0);
+      const d = data.reduce((s, d) => s + d.discharges, 0);
+      const peak =
+        data.length > 0
+          ? data.reduce((p, c) => (c.admissions > p.admissions ? c : p))
+              .time
+          : "-";
+      return {
+        expectedAdmissions: a,
+        expectedDischarges: d,
+        netChange: a - d,
+        peakHour: peak,
+        riskText:
+          occupancyStatus === "critical"
+            ? "🔴 High"
+            : occupancyStatus === "watch"
+            ? "🟡 Medium"
+            : "🟢 Low",
+      };
+    }, [data, occupancyStatus]);
 
   return (
-    <div className="dashboard-root">
-      <header className="dashboard-header">
-        <h1>Inflow vs Outflow Forecast</h1>
-        
-        {/* File Upload Section */}
-        <div className="file-upload-section" style={{ marginBottom: "1.5rem", padding: "1rem", backgroundColor: "#f0f9ff", border: "1px solid #0ea5e9", borderRadius: "0.5rem" }}>
-          <label htmlFor="csv-upload" style={{ display: "block", fontWeight: "600", marginBottom: "0.5rem", color: "#0369a1" }}>
+    <div className="min-h-screen w-full bg-slate-50 p-6 space-y-8">
+      <div className="max-w-7xl mx-auto p-6 space-y-8">
+        {/* Header */}
+      <header className="mt-10 space-y-6">
+        <h1 className="text-3xl font-bold">Inflow vs Outflow Forecast</h1>
+
+        {/* Upload */}
+        <div className="bg-sky-50 border border-sky-400 rounded-lg p-4">
+          <label className="block font-semibold text-sky-700 mb-2">
             Upload CSV Data (timestamp, inflow, outflow)
           </label>
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <div className="flex gap-3 items-center">
             <input
-              id="csv-upload"
               type="file"
               accept=".csv"
               onChange={handleFileUpload}
               disabled={isLoading}
-              style={{
-                flex: 1,
-                padding: "0.5rem",
-                border: "1px solid #cbd5e1",
-                borderRadius: "0.375rem",
-                fontSize: "0.875rem",
-              }}
+              className="flex-1 border rounded-md px-3 py-2 text-sm"
             />
             {uploadedFile && (
-              <span style={{ fontSize: "0.875rem", color: "#059669" }}>
+              <span className="text-emerald-600 text-sm">
                 ✓ {uploadedFile.name}
               </span>
             )}
             {isLoading && (
-              <span style={{ fontSize: "0.875rem", color: "#0ea5e9" }}>
-                Loading...
-              </span>
+              <span className="text-sky-600 text-sm">Loading...</span>
             )}
           </div>
         </div>
-        
-        <div className="timeframe-controls">
-          <button
-            className={`tf-btn ${timeframe === "24h" ? "active" : ""}`}
-            onClick={() => setTimeframe("24h")}
-          >
-            Next 24 hours
-          </button>
-          <button
-            className={`tf-btn ${timeframe === "72h" ? "active" : ""}`}
-            onClick={() => setTimeframe("72h")}
-          >
-            Next 72 hours
-          </button>
-          <button
-            className={`tf-btn ${timeframe === "7d" ? "active" : ""}`}
-            onClick={() => setTimeframe("7d")}
-          >
-            Next 7 days
-          </button>
+
+        {/* Timeframe */}
+        <div className="flex gap-3">
+          {["24h", "72h", "7d"].map((tf) => (
+            <button
+              key={tf}
+              onClick={() => setTimeframe(tf)}
+              className={`px-4 py-2 rounded-md border font-medium ${
+                timeframe === tf
+                  ? "bg-blue-600 text-white"
+                  : "bg-white hover:bg-gray-100"
+              }`}
+            >
+              {tf === "24h"
+                ? "Next 24 hours"
+                : tf === "72h"
+                ? "Next 72 hours"
+                : "Next 7 days"}
+            </button>
+          ))}
         </div>
 
-        <div className="occupancy-card">
-          <h2>Bed Occupancy Forecast (Critical KPI)</h2>
-          <div className="occupancy-metrics">
-            <div>Total Beds: <strong>{totalBeds}</strong></div>
-            <div>
-              Predicted Occupancy ({timeframeLabel}): <strong>{predictedOccupied} ({occupancyPercent}%)</strong>
-            </div>
+        {/* Occupancy */}
+        <div className="bg-white border rounded-xl p-6 shadow">
+          <h2 className="font-semibold text-lg mb-4">
+            Bed Occupancy Forecast (Critical KPI)
+          </h2>
+
+          <div className="flex justify-between text-sm mb-2">
+            <span>Total Beds: <strong>{totalBeds}</strong></span>
+            <span>
+              Predicted ({timeframeLabel}):{" "}
+              <strong>{predictedOccupied} ({occupancyPercent}%)</strong>
+            </span>
           </div>
 
-          <div className="occupancy-bar" aria-hidden="true">
-            <div className={`occupancy-fill ${occupancyStatus}`} style={{ width: `${Math.min(occupancyPercent, 100)}%` }} />
+          <div className="h-3 bg-gray-200 rounded overflow-hidden mb-3">
+            <div
+              className={`h-full ${
+                occupancyStatus === "critical"
+                  ? "bg-red-500"
+                  : occupancyStatus === "watch"
+                  ? "bg-yellow-400"
+                  : "bg-green-500"
+              }`}
+              style={{ width: `${occupancyPercent}%` }}
+            />
           </div>
 
-          <div className="occupancy-legend">
-            <span className="legend-safe">🟢 &lt;70% (Safe)</span>
-            <span className="legend-watch">🟡 70–85% (Watch)</span>
-            <span className="legend-critical">🔴 &gt;85% (Critical)</span>
+          <div className="flex justify-between text-xs">
+            <span>🟢 &lt;70%</span>
+            <span>🟡 70–85%</span>
+            <span>🔴 &gt;85%</span>
           </div>
         </div>
       </header>
 
-      <section className="kpi-row" aria-label="Summary metrics">
-        <div className="kpi-card">
-          <div className="kpi-title">Expected Admissions ({timeframe})</div>
-          <div className="kpi-value">{expectedAdmissions}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-title">Expected Discharges ({timeframe})</div>
-          <div className="kpi-value">{expectedDischarges}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-title">Net Patient Change</div>
-          <div className="kpi-value">{netChange >= 0 ? `+${netChange}` : netChange}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-title">Peak Hour</div>
-          <div className="kpi-value">{peakHour}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-title">Risk Level</div>
-          <div className={`kpi-value risk-${occupancyStatus}`}>{riskText}</div>
-        </div>
+      {/* KPIs */}
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[
+          ["Expected Admissions", expectedAdmissions],
+          ["Expected Discharges", expectedDischarges],
+          ["Net Change", netChange >= 0 ? `+${netChange}` : netChange],
+          ["Peak Hour", peakHour],
+          ["Risk Level", riskText],
+        ].map(([label, value]) => (
+          <div
+            key={label}
+            className="bg-white border rounded-lg p-4 text-center shadow-sm"
+          >
+            <div className="text-sm text-gray-500">{label}</div>
+            <div className="text-xl font-bold mt-1">{value}</div>
+          </div>
+        ))}
       </section>
 
-      <main className="dashboard-chart">
+      {/* Chart */}
+      <main className="bg-white border rounded-xl p-4 shadow">
         <ResponsiveContainer width="100%" height={450}>
-          <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" tick={{ fontSize: 12 }} />
-            <YAxis allowDecimals={false} />
+            <XAxis dataKey="time" />
+            <YAxis />
             <Tooltip />
             <Legend />
             <Line
@@ -217,7 +234,6 @@ export default function Dashboard() {
               stroke="#2563eb"
               strokeWidth={2}
               dot={false}
-              name="Predicted Admissions"
             />
             <Line
               type="monotone"
@@ -225,17 +241,16 @@ export default function Dashboard() {
               stroke="#16a34a"
               strokeWidth={2}
               dot={false}
-              name="Predicted Discharges"
             />
           </LineChart>
         </ResponsiveContainer>
       </main>
 
-      <footer className="dashboard-note">
-        <p>
-          Showing <strong>{timeframe}</strong> forecast {forecastData ? "from uploaded data" : "with mocked data"}.
-        </p>
-      </footer>
+      <p className="text-sm text-gray-500">
+        Showing <strong>{timeframe}</strong> forecast{" "}
+        {forecastData ? "from uploaded data" : "with mocked data"}.
+      </p>
+      </div>
     </div>
   );
 }
