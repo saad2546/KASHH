@@ -274,21 +274,6 @@ const SurgicalScheduling = () => {
               surgeries={pendingSurgeries}
               onDelete={handleDeleteFromQueue}
             />
-
-            {/* AI INSIGHTS */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <BrainCircuit size={18} className="text-amber-600" />
-                <span className="text-sm font-bold text-amber-800">
-                  AI Insights
-                </span>
-              </div>
-
-              <p className="text-sm italic text-amber-700">
-                “Moving Sarah Connor to OR-1 reduces turnover by 15 minutes. No
-                conflicts detected for the next 8 hours.”
-              </p>
-            </div>
           </aside>
 
           {/* RIGHT COLUMN */}
