@@ -2,7 +2,7 @@ import React from "react";
 import { Clock, Trash2, GripVertical } from "lucide-react";
 
 const priorityColors = {
-  urgent: "bg-red-100 text-red-700",
+  high: "bg-red-100 text-red-700",
   normal: "bg-yellow-100 text-yellow-700",
   elective: "bg-blue-100 text-blue-700",
 };

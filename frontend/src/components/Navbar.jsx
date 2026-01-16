@@ -1,15 +1,9 @@
 import {
-  Book,
-  BookOpenCheck,
-  Home,
   Hospital,
-  LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
   UserPlus,
-  Users,
-  Users2,
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -36,6 +30,8 @@ import { toast } from "sonner";
 
 import { auth } from "@/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
+import LandingPage from "@/pages/Landing";
+import PatientFlow from "@/pages/PatientFlow";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -82,6 +78,7 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-4">
           <nav className="hidden lg:flex items-center gap-4">
             <Link to="/dashboard" className="text-sm">Dashboard</Link>
+            <Link to="/patient-flow" className="text-sm">Patient Inflow/Outflow</Link>
             <Link to="/scheduling" className="text-sm">Surgical Schedule</Link>
             <Link to="/inventory" className="text-sm">Pharmacy Inventory</Link>
           </nav>
@@ -160,12 +157,11 @@ const MobileNavbar = ({ user, onLogout }) => {
         </SheetHeader>
 
         <nav className="mt-6 flex flex-col gap-3">
-          <button onClick={() => go("/")}> <Home /> Home </button>
-          <button onClick={() => go("/dashboard")}> <LayoutDashboard /> Dashboard </button>
-          <button onClick={() => go("/books")}> <Book /> Books </button>
-          <button onClick={() => go("/authors")}> <Users /> Authors </button>
-          <button onClick={() => go("/users")}> <Users2 /> Users </button>
-          <button onClick={() => go("/borrows")}> <BookOpenCheck /> Borrow/Return </button>
+          <button onClick={() => go("/")}> Home </button>
+          <button onClick={() => go("/dashboard")}> Dashboard </button>
+          <button onClick={() => go("/patient-flow")}> Patient Flow </button>
+          <button onClick={() => go("/scheduling")}> Surgical Schedule </button>
+          <button onClick={() => go("/inventory")}> Pharmacy Inventory </button>
 
           <div className="border-t my-3" />
 

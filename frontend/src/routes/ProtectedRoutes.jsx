@@ -4,7 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 
 const ProtectedRoutes = ({ children }) => {
-  const [user, setUser] = useState(undefined); // undefined = loading
+  const [user, setUser] = useState(undefined);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -15,7 +15,11 @@ const ProtectedRoutes = ({ children }) => {
   }, []);
 
   if (user === undefined) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <p className="text-slate-600 font-medium">Loading...</p>
+      </div>
+    );
   }
 
   return user ? children : <Navigate to="/login" replace />;

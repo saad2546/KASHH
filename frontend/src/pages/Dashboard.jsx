@@ -1,298 +1,261 @@
-import { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-import getForecast from "../lib/forecast";
+  BedDouble,
+  Hospital,
+  Activity,
+  Building2,
+  UserRound,
+  Stethoscope,
+} from "lucide-react";
 
-function formatLabel(iso, timeframe) {
-  const d = new Date(iso);
-  if (timeframe === "24h" || timeframe === "72h") {
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  return d.toLocaleDateString([], { month: "short", day: "numeric" });
-}
+import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { db } from "@/firebase";
+
+import { useHospital } from "@/context/HospitalContext";
+
+const StatCard = ({ title, value, subtext, icon: Icon, badge }) => {
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md transition">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {title}
+          </p>
+
+          <p className="text-2xl font-extrabold text-slate-900 mt-2">
+            {value ?? "-"}
+          </p>
+
+          {subtext && (
+            <p className="text-sm text-slate-500 mt-1 font-medium">{subtext}</p>
+          )}
+        </div>
+
+        <div className="h-10 w-10 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+          <Icon size={20} className="text-blue-600" />
+        </div>
+      </div>
+
+      {badge && (
+        <div className="mt-4">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+            {badge}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SurgeonRow = ({ surgeon }) => {
+  return (
+    <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition">
+      <div className="flex items-center gap-3">
+        <div className="h-9 w-9 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center">
+          <UserRound size={18} className="text-purple-600" />
+        </div>
+
+        <div>
+          <p className="font-semibold text-slate-900 text-sm">
+            {surgeon.name || "Unnamed Surgeon"}
+          </p>
+          <p className="text-xs text-slate-500 font-medium">
+            {surgeon.department || "Department not set"}
+          </p>
+        </div>
+      </div>
+
+      <span className="text-xs font-bold px-2 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-700">
+        Surgeon
+      </span>
+    </div>
+  );
+};
 
 export default function Dashboard() {
-  const [timeframe, setTimeframe] = useState("24h");
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [forecastData, setForecastData] = useState(null);
+  const { hospital, loading } = useHospital();
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Surgeons (subcollection)
+  const [surgeons, setSurgeons] = useState([]);
 
-    setUploadedFile(file);
-    setIsLoading(true);
+  const surgeonCount = surgeons.length;
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("horizon", timeframe);
+  // ✅ Real-time surgeons fetch
+  useEffect(() => {
+    if (loading) return;
+    if (!hospital?.id) return;
 
-      const response = await fetch("http://localhost:5000/api/predict-patient-flow", {
-        method: "POST",
-        body: formData,
-      });
+    const surgeonsRef = collection(db, "hospitals", hospital.id, "surgeons");
+    const q = query(surgeonsRef, orderBy("name", "asc"));
 
-      if (!response.ok) throw new Error("Upload failed");
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const list = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        }));
+        setSurgeons(list);
+      },
+      (error) => {
+        console.error("Surgeons listener error:", error);
+      }
+    );
 
-      const result = await response.json();
-      setForecastData(result);
-    } catch (err) {
-      alert("Upload failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => unsubscribe();
+  }, [hospital?.id, loading]);
 
-  const data = useMemo(() => {
-    if (forecastData) {
-      return forecastData.map((pt) => ({
-        time: formatLabel(pt.timestamp, timeframe),
-        admissions: Math.round(pt.predicted_inflow),
-        discharges: Math.round(pt.predicted_outflow),
-      }));
-    }
-    return getForecast(timeframe).map((pt) => ({
-      time: formatLabel(pt.time, timeframe),
-      admissions: Math.round(pt.admissions),
-      discharges: Math.round(pt.discharges),
-    }));
-  }, [timeframe, forecastData]);
+  // Labels (small smart badges)
+  const bedsBadge = useMemo(() => {
+    const totalBeds = Number(hospital?.number_of_beds || 0);
+    if (!totalBeds) return null;
+    if (totalBeds >= 300) return "Large hospital";
+    if (totalBeds >= 100) return "Mid-size hospital";
+    return "Small facility";
+  }, [hospital?.number_of_beds]);
 
-  const totalBeds = 200;
-  const currentOccupancy = Math.round(totalBeds * 0.6);
+  const icuBadge = useMemo(() => {
+    const icu = Number(hospital?.icu_beds || 0);
+    if (!icu) return null;
+    return icu >= 25 ? "Healthy ICU capacity" : "Limited ICU capacity";
+  }, [hospital?.icu_beds]);
 
-  const { predictedOccupied, occupancyPercent, occupancyStatus, timeframeLabel } =
-    useMemo(() => {
-      const net = data.reduce((a, d) => a + (d.admissions - d.discharges), 0);
-      const predicted = Math.max(
-        0,
-        Math.min(totalBeds, currentOccupancy + Math.round(net))
-      );
-      const percent = Math.round((predicted / totalBeds) * 100);
-      const status =
-        percent > 85 ? "critical" : percent >= 70 ? "watch" : "safe";
-      const label =
-        timeframe === "24h"
-          ? "Tomorrow"
-          : timeframe === "72h"
-          ? "Next 72 hours"
-          : "Next 7 days";
-      return { predictedOccupied: predicted, occupancyPercent: percent, occupancyStatus: status, timeframeLabel: label };
-    }, [data, timeframe]);
+  const emergencyBadge = useMemo(() => {
+    const e = Number(hospital?.emergency_beds || 0);
+    if (!e) return null;
+    return e >= 15 ? "Emergency ready" : "Emergency tight";
+  }, [hospital?.emergency_beds]);
 
-  const {
-  expectedAdmissions,
-  expectedDischarges,
-  netChange,
-  netLabel,
-  netColor,
-  peakHour,
-  riskText,
-} = useMemo(() => {
-  const a = data.reduce((s, d) => s + d.admissions, 0);
-  const d = data.reduce((s, d) => s + d.discharges, 0);
-  const net = a - d;
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500 font-medium">Loading hospital dashboard...</p>
+      </div>
+    );
+  }
 
-  const peak =
-    data.length > 0
-      ? data.reduce((p, c) => (c.admissions > p.admissions ? c : p)).time
-      : "-";
-
-  return {
-    expectedAdmissions: a,
-    expectedDischarges: d,
-    netChange: net,
-    netLabel:
-      net > 0
-        ? `+${net} (Growth)`
-        : net < 0
-        ? `${net} (Relief)`
-        : "0 (Stable)",
-    netColor:
-      net > 0
-        ? "text-red-600"
-        : net < 0
-        ? "text-green-600"
-        : "text-gray-600",
-    peakHour: peak,
-    riskText:
-      occupancyStatus === "critical"
-        ? "🔴 High"
-        : occupancyStatus === "watch"
-        ? "🟡 Medium"
-        : "🟢 Low",
-  };
-}, [data, occupancyStatus]);
-
-    useMemo(() => {
-      const a = data.reduce((s, d) => s + d.admissions, 0);
-      const d = data.reduce((s, d) => s + d.discharges, 0);
-      const peak =
-        data.length > 0
-          ? data.reduce((p, c) => (c.admissions > p.admissions ? c : p))
-              .time
-          : "-";
-      return {
-        expectedAdmissions: a,
-        expectedDischarges: d,
-        netChange: a - d,
-        peakHour: peak,
-        riskText:
-          occupancyStatus === "critical"
-            ? "🔴 High"
-            : occupancyStatus === "watch"
-            ? "🟡 Medium"
-            : "🟢 Low",
-      };
-    }, [data, occupancyStatus]);
+  // No hospital configured
+  if (!hospital) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center px-6">
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm max-w-lg w-full text-center">
+          <h2 className="text-xl font-extrabold text-slate-900">
+            Hospital not configured
+          </h2>
+          <p className="text-slate-500 mt-2">
+            Please complete hospital setup to access dashboard analytics.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 p-6 space-y-8">
+    <div className="min-h-screen w-full bg-slate-50 p-6">
       <div className="max-w-7xl mx-auto p-6 space-y-8">
-        {/* Header */}
-      <header className="mt-10 space-y-6">
-        <h1 className="text-3xl font-bold">Inflow vs Outflow Forecast</h1>
-
-        {/* Upload */}
-        <div className="bg-sky-50 border border-sky-400 rounded-lg p-4">
-          <label className="block font-semibold text-sky-700 mb-2">
-            Upload CSV Data (timestamp, inflow, outflow)
-          </label>
-          <div className="flex gap-3 items-center">
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-              disabled={isLoading}
-              className="flex-1 border rounded-md px-3 py-2 text-sm"
-            />
-            {uploadedFile && (
-              <span className="text-emerald-600 text-sm">
-                ✓ {uploadedFile.name}
-              </span>
-            )}
-            {isLoading && (
-              <span className="text-sky-600 text-sm">Loading...</span>
-            )}
-          </div>
-        </div>
-
-        {/* Timeframe */}
-        <div className="flex gap-3">
-          {["24h", "72h", "7d"].map((tf) => (
-            <button
-              key={tf}
-              onClick={() => setTimeframe(tf)}
-              className={`px-4 py-2 rounded-md border font-medium ${
-                timeframe === tf
-                  ? "bg-blue-600 text-white"
-                  : "bg-white hover:bg-gray-100"
-              }`}
-            >
-              {tf === "24h"
-                ? "Next 24 hours"
-                : tf === "72h"
-                ? "Next 72 hours"
-                : "Next 7 days"}
-            </button>
-          ))}
-        </div>
-
-        {/* Occupancy */}
-        <div className="bg-white border rounded-xl p-6 shadow">
-          <h2 className="font-semibold text-lg mb-4">
-            Bed Occupancy Forecast (Critical KPI)
-          </h2>
-
-          <div className="flex justify-between text-sm mb-2">
-            <span>Total Beds: <strong>{totalBeds}</strong></span>
-            <span>
-              Predicted ({timeframeLabel}):{" "}
-              <strong>{predictedOccupied} ({occupancyPercent}%)</strong>
+        {/* HEADER */}
+        <header className="mt-10">
+          <div className="flex items-center gap-2 mb-2">
+            <Hospital size={20} className="text-blue-600" />
+            <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">
+              Hospital Dashboard
             </span>
           </div>
 
-          <div className="h-3 bg-gray-200 rounded overflow-hidden mb-3">
-            <div
-              className={`h-full ${
-                occupancyStatus === "critical"
-                  ? "bg-red-500"
-                  : occupancyStatus === "watch"
-                  ? "bg-yellow-400"
-                  : "bg-green-500"
-              }`}
-              style={{ width: `${occupancyPercent}%` }}
-            />
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                {hospital.hospital_name}
+              </h1>
+
+              <p className="text-slate-500 font-medium mt-1">
+                {hospital.address}, {hospital.city}, {hospital.state}{" "}
+                {hospital.pincode ? `- ${hospital.pincode}` : ""}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+                <p className="text-xs font-bold text-blue-700 uppercase">
+                  Operating Rooms
+                </p>
+                <p className="text-lg font-extrabold text-blue-900">
+                  {hospital.operating_rooms ?? "-"}
+                </p>
+              </div>
+
+              <div className="px-4 py-2 bg-slate-900 rounded-lg text-white">
+                <p className="text-xs font-bold uppercase text-white/80">
+                  Surgeons
+                </p>
+                <p className="text-lg font-extrabold">{surgeonCount}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* KPI GRID */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <StatCard
+            title="Total Beds"
+            value={hospital.number_of_beds ?? 0}
+            subtext="Total capacity"
+            icon={BedDouble}
+            badge={bedsBadge}
+          />
+
+          <StatCard
+            title="ICU Beds"
+            value={hospital.icu_beds ?? 0}
+            subtext="Critical care beds"
+            icon={Activity}
+            badge={icuBadge}
+          />
+
+          <StatCard
+            title="Emergency Beds"
+            value={hospital.emergency_beds ?? 0}
+            subtext="Emergency handling"
+            icon={Building2}
+            badge={emergencyBadge}
+          />
+
+          <StatCard
+            title="Surgeons"
+            value={surgeonCount}
+            subtext="Available specialists"
+            icon={Stethoscope}
+            badge={surgeonCount >= 10 ? "Strong team" : "Limited team"}
+          />
+        </section>
+
+        {/* SURGEON DIRECTORY */}
+        <section className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900">
+                Surgeon Directory
+              </h2>
+            </div>
+
+            <div className="text-xs font-bold px-3 py-1.5 rounded-lg bg-purple-50 border border-purple-100 text-purple-700">
+              {surgeonCount} total
+            </div>
           </div>
 
-          <div className="flex justify-between text-xs">
-            <span>🟢 &lt;70%</span>
-            <span>🟡 70–85%</span>
-            <span>🔴 &gt;85%</span>
-          </div>
-        </div>
-      </header>
-
-      {/* KPIs */}
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {[
-          ["Expected Admissions", expectedAdmissions],
-          ["Expected Discharges", expectedDischarges],
-          ["Net Change", netLabel, netColor],
-          ["Peak Hour", peakHour],
-          ["Risk Level", riskText],
-        ].map(([label, value, color]) => (
-          <div
-            key={label}
-            className="bg-white border rounded-lg p-4 text-center shadow-sm"
-          >
-            <div className="text-sm text-gray-500">{label}</div>
-            <div className={`text-xl font-bold mt-1 ${color || ""}`}>{value}</div>
-          </div>
-        ))}
-      </section>
-
-      {/* Chart */}
-      <main className="bg-white border rounded-xl p-4 shadow">
-        <ResponsiveContainer width="100%" height={450}>
-          <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="admissions"
-              stroke="#2563eb"
-              strokeWidth={2}
-              dot={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="discharges"
-              stroke="#16a34a"
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </main>
-
-      <p className="text-sm text-gray-500">
-        Showing <strong>{timeframe}</strong> forecast{" "}
-        {forecastData ? "from uploaded data" : "with mocked data"}.
-      </p>
+          {surgeons.length === 0 ? (
+            <div className="text-center py-10 text-slate-500 font-medium">
+              No surgeons added yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {surgeons.map((s) => (
+                <SurgeonRow key={s.id} surgeon={s} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

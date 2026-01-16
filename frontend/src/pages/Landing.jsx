@@ -20,7 +20,7 @@ export default function LandingPage() {
             optimizes surgical schedules, and prevents resource shortages — all in real time.
           </p>
           <div className="flex gap-4">
-            <button onClick={() => navigate("/dashboard")} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow">
+            <button onClick={() => navigate("/patient-flow")} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3 rounded-xl shadow">
               Get Started <ArrowRight size={18} />
             </button>
             <button onClick={() => navigate("/scheduling")} className="border border-slate-300 px-6 py-3 rounded-xl font-semibold text-slate-700 hover:bg-white">

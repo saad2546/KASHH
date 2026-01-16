@@ -64,7 +64,7 @@ export default function Register() {
       });
       */
 
-      toast.success("Registration successful! 🎉");
+      toast.success("Registration successful!");
       navigate("/");
     } catch (error) {
       console.error(error);

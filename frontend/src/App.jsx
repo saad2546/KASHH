@@ -1,48 +1,93 @@
-import './App.css';
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import Dashboard from './pages/Dashboard';
-import SurgicalScheduling from './pages/SurgicalScheduling';
-import Login from "./pages/Login";
+import "./App.css";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Toaster } from "sonner";
 import Navbar from "./components/Navbar";
-import ProtectedRoutes from './routes/ProtectedRoutes';
-import LandingPage from './pages/Landing';
-import Register from './pages/Register';
-import { Toaster } from 'sonner';
+import LandingPage from "./pages/Landing";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import HospitalSetup from "./pages/HospitalSetup";
+import Dashboard from "./pages/Dashboard";
+import PatientFlow from "./pages/PatientFlow";
+import SurgicalScheduling from "./pages/SurgicalScheduling";
+import PharamcyInventory from "./pages/PharmacyInventory";
+import ProtectedRoutes from "./routes/ProtectedRoutes";
+import RequireHospital from "./routes/RequireHospital"; 
+import AppRedirect from "./pages/AppRedirect"; 
+import { HospitalProvider } from "./context/HospitalContext";
+
 
 function App() {
   return (
-    <Router>
-      <Navbar />
-      <Toaster richColors position="bottom-right" />
+    <HospitalProvider>
+      <Router>
+        <Navbar />
+        <Toaster richColors position="bottom-right" />
 
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Routes>
+          {/* PUBLIC ROUTES */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
+          {/* AUTH ENTRY POINT */}
+          <Route
+            path="/app"
+            element={
+              <ProtectedRoutes>
+                <AppRedirect />
+              </ProtectedRoutes>
+            }
+          />
 
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoutes>
-              <Dashboard />
-            </ProtectedRoutes>
-          }
-        />
-        <Route
-          path="/scheduling"
-          element={
-            <ProtectedRoutes>
-              <SurgicalScheduling />
-            </ProtectedRoutes>
-          }
-        />
+          {/* SETUP (auth only) */}
+          <Route
+            path="/setup-hospital"
+            element={
+              <ProtectedRoutes>
+                <HospitalSetup />
+              </ProtectedRoutes>
+            }
+          />
 
-        {/* Default Redirect */}
-        <Route path="/" element={<LandingPage />} />
-      </Routes>
-    </Router>
+          {/* HOSPITAL PROTECTED ROUTES */}
+          <Route
+            path="/dashboard"
+            element={
+              <RequireHospital>
+                <Dashboard />
+              </RequireHospital>
+            }
+          />
+
+           <Route
+            path="/patient-flow"
+            element={
+              <RequireHospital>
+                <PatientFlow />
+              </RequireHospital>
+            }
+          />
+
+          <Route
+            path="/scheduling"
+            element={
+              <RequireHospital>
+                <SurgicalScheduling />
+              </RequireHospital>
+            }
+          />
+
+          <Route
+            path="/inventory"
+            element={
+              <RequireHospital>
+                <PharamcyInventory />
+              </RequireHospital>
+            }
+          />
+        </Routes>
+      </Router>
+    </HospitalProvider>
   );
 }
 
