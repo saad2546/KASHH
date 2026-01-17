@@ -13,7 +13,14 @@ from services.inventory import generate_inventory_insights
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # allow frontend access
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:5173",  # For local development
+            "https://hellfire-pulseops.vercel.app"  # Your actual Vercel URL
+        ]
+    }
+})
 
 @app.route("/")
 def health_check():
