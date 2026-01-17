@@ -35,6 +35,7 @@ import OptimizedSchedule from "../components/OptimizedSchedule";
 import { useHospital } from "@/context/HospitalContext";
 
 const SurgicalScheduling = () => {
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
   const { hospital, loading } = useHospital();
 
   const [pendingSurgeries, setPendingSurgeries] = useState([]);
@@ -146,7 +147,7 @@ const SurgicalScheduling = () => {
 
       try {
         const response = await fetch(
-          "http://localhost:5000/api/optimize-schedule",
+          `${API_URL}/api/optimize-schedule`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },

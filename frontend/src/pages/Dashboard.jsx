@@ -80,7 +80,7 @@ export default function Dashboard() {
 
   const surgeonCount = surgeons.length;
 
-  // ✅ Real-time surgeons fetch
+  // Real-time surgeons fetch
   useEffect(() => {
     if (loading) return;
     if (!hospital?.id) return;

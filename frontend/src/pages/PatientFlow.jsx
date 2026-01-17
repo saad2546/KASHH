@@ -22,6 +22,7 @@ function formatLabel(iso) {
 }
 
 export default function PatientFlow() {
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
   const { hospital } = useHospital();
 
   // Only 7 day forecast
@@ -48,7 +49,7 @@ export default function PatientFlow() {
       formData.append("horizon", "7d");
 
       const response = await fetch(
-        "http://localhost:5000/api/predict-patient-flow",
+        `${API_URL}/api/predict-patient-flow`,
         {
           method: "POST",
           body: formData,
@@ -66,7 +67,6 @@ export default function PatientFlow() {
     }
   };
 
-  // ✅ ONLY REAL DATA (no fallback)
   const data = useMemo(() => {
     if (!forecastData) return [];
 
@@ -85,7 +85,6 @@ export default function PatientFlow() {
     }));
   }, [forecastData]);
 
-  // ✅ KPI + band should only appear when forecast exists
   const { predictedOccupied, occupancyPercent, occupancyStatus, timeframeLabel } =
     useMemo(() => {
       if (!forecastData || data.length === 0) {

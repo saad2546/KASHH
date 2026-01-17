@@ -11,6 +11,7 @@ import InventoryTable from "@/components/InventoryTable";
 import InventoryInsights from "@/components/InventoryInsights";
 
 export default function Inventory() {
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
   const { hospital, loading } = useHospital();
 
   const [items, setItems] = useState([]);
@@ -84,7 +85,7 @@ export default function Inventory() {
     setInsights(null);
 
     try {
-      const response = await fetch("http://localhost:5000/api/inventory-insights", {
+      const response = await fetch(`${API_URL}/api/inventory-insights`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

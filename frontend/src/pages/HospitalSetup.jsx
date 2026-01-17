@@ -15,7 +15,7 @@ export default function HospitalSetup() {
   const navigate = useNavigate();
   const { refreshHospital } = useHospital();
 
-  // ✅ Hospital Form
+  // Hospital Form
   const [formData, setFormData] = useState({
     hospital_name: "",
     address: "",

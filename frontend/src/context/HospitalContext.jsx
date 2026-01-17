@@ -40,7 +40,7 @@ export const HospitalProvider = ({ children }) => {
     }
   };
 
-  // ✅ LISTEN TO AUTH STATE CHANGES
+  // LISTEN TO AUTH STATE CHANGES
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       // when login/logout happens, re-fetch hospital
