@@ -33,12 +33,13 @@ def optimize_schedule(request):
         return jsonify({"error": "No surgeries provided"}), 400
 
     # Validate input schema
+    # NOTE: duration_minutes is intentionally excluded — duration is hardcoded
+    # to 60 minutes internally. Sending it from the frontend is optional.
     required_fields = [
         "id",
         "patient_name",
         "surgeon",
-        "duration_minutes",
-        "scheduled_start_time"
+        "scheduled_start_time",
     ]
 
     for s in surgeries:
@@ -60,7 +61,8 @@ def optimize_schedule(request):
     # -----------------------------
     for s in surgeries:
         sid = s["id"]
-        duration = int(s["duration_minutes"])
+        # Use duration_minutes from payload if provided, otherwise default to 60
+        duration = int(s.get("duration_minutes", 60))
         surgeon = s["surgeon"]
 
         requested_start = time_to_minutes(s["scheduled_start_time"])

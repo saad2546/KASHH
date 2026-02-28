@@ -36,7 +36,7 @@ const Login = () => {
       );
 
       toast.success("Login successful");
-      navigate("/dashboard");
+      navigate("/app");
     } catch (error) {
       console.error(error);
       toast.error(error.message || "Login failed");

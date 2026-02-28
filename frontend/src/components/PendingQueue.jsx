@@ -1,13 +1,24 @@
 import React from "react";
-import { Clock, Trash2, GripVertical } from "lucide-react";
+import { Trash2, GripVertical, Zap, User } from "lucide-react";
 
-const priorityColors = {
-  high: "bg-red-100 text-red-700",
-  normal: "bg-yellow-100 text-yellow-700",
-  elective: "bg-blue-100 text-blue-700",
+const getScoreColor = (score) => {
+  if (score >= 7) return "bg-red-100 text-red-700 border-red-200";
+  if (score >= 4) return "bg-yellow-100 text-yellow-700 border-yellow-200";
+  return "bg-green-100 text-green-700 border-green-200";
+};
+
+const getScoreLabel = (score) => {
+  if (score >= 7) return "Urgent";
+  if (score >= 4) return "Moderate";
+  return "Low";
 };
 
 const PendingQueue = ({ surgeries, onDelete }) => {
+  // Sort by priority_score descending (highest priority first)
+  const sorted = [...surgeries].sort(
+    (a, b) => (b.priority_score || 0) - (a.priority_score || 0)
+  );
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
       {/* HEADER */}
@@ -20,7 +31,13 @@ const PendingQueue = ({ surgeries, onDelete }) => {
 
       {/* LIST */}
       <div className="divide-y divide-slate-200">
-        {surgeries.map((surgery) => (
+        {sorted.length === 0 && (
+          <div className="px-5 py-8 text-center text-sm text-slate-400">
+            No pending requests yet
+          </div>
+        )}
+
+        {sorted.map((surgery) => (
           <div
             key={surgery.id}
             className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition"
@@ -34,20 +51,36 @@ const PendingQueue = ({ surgeries, onDelete }) => {
                 </span>
 
                 <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                    priorityColors[surgery.priority.toLowerCase()]
-                  }`}
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full border ${getScoreColor(
+                    surgery.priority_score || 0
+                  )}`}
                 >
-                  {surgery.priority}
+                  {(surgery.priority_score || 0).toFixed(1)} — {getScoreLabel(surgery.priority_score || 0)}
                 </span>
               </div>
 
               <div className="flex gap-4 text-xs text-slate-500 font-medium">
                 <span className="flex items-center gap-1">
-                  <Clock size={12} />
-                  {surgery.duration}m
+                  <User size={12} />
+                  {surgery.surgeon}
                 </span>
-                <span>{surgery.surgeon}</span>
+
+                {surgery.is_emergency && (
+                  <span className="flex items-center gap-1 text-red-600 font-bold">
+                    <Zap size={12} />
+                    EMERGENCY
+                  </span>
+                )}
+
+                {surgery.appointment_type && (
+                  <span className="capitalize">
+                    {surgery.appointment_type === "new"
+                      ? "New"
+                      : surgery.appointment_type === "follow-up"
+                        ? "Follow-up"
+                        : "Report"}
+                  </span>
+                )}
               </div>
             </div>
 

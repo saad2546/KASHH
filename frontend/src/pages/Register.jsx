@@ -53,8 +53,6 @@ export default function Register() {
         displayName: input.name,
       });
 
-      // OPTIONAL: Save user data to Firestore
-      /*
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: input.name,
@@ -62,7 +60,6 @@ export default function Register() {
         role: "admin",
         createdAt: serverTimestamp(),
       });
-      */
 
       toast.success("Registration successful!");
       navigate("/");

@@ -62,7 +62,7 @@ const Navbar = () => {
   return (
     <header className="h-16 bg-white dark:bg-[#020817] border-b fixed top-0 left-0 right-0 z-40">
       <div className="max-w-7xl mx-auto px-4 md:px-6 h-full flex items-center justify-between">
-        
+
         {/* Logo */}
         <div
           className="flex items-center gap-3 cursor-pointer"
@@ -79,7 +79,7 @@ const Navbar = () => {
           <nav className="hidden lg:flex items-center gap-4">
             <Link to="/dashboard" className="text-sm">Dashboard</Link>
             <Link to="/patient-flow" className="text-sm">Patient Inflow/Outflow</Link>
-            <Link to="/scheduling" className="text-sm">Surgical Schedule</Link>
+            <Link to="/scheduling" className="text-sm">Appointment Schedule</Link>
             <Link to="/inventory" className="text-sm">Pharmacy Inventory</Link>
           </nav>
 

@@ -3,18 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { useHospital } from "../context/HospitalContext";
 
 const AppRedirect = () => {
-  const { hospital, loading } = useHospital();
+  const { hospital, loading, userRole } = useHospital();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (loading) return;
 
-    if (hospital) {
+    if (userRole === "doctor" && hospital) {
+      navigate("/doctor-dashboard", { replace: true });
+    } else if (hospital) {
       navigate("/dashboard", { replace: true });
     } else {
       navigate("/setup-hospital", { replace: true });
     }
-  }, [hospital, loading, navigate]);
+  }, [hospital, loading, userRole, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">

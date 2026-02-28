@@ -28,8 +28,8 @@ export default function HospitalSetup() {
     operating_rooms: "",
   });
 
-  const [numSurgeons, setNumSurgeons] = useState(1);
-  const [surgeons, setSurgeons] = useState([{ name: "", department: "" }]);
+  const [numDoctors, setNumDoctors] = useState(1);
+  const [doctors, setDoctors] = useState([{ name: "", department: "" }]);
 
   const [loading, setLoading] = useState(false);
 
@@ -37,11 +37,11 @@ export default function HospitalSetup() {
     setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
   };
 
-  const handleNumSurgeonsChange = (e) => {
+  const handleNumDoctorsChange = (e) => {
     const value = Math.max(1, Number(e.target.value || 1));
-    setNumSurgeons(value);
+    setNumDoctors(value);
 
-    setSurgeons((prev) => {
+    setDoctors((prev) => {
       const updated = [...prev];
 
       if (value > updated.length) {
@@ -54,8 +54,8 @@ export default function HospitalSetup() {
     });
   };
 
-  const handleSurgeonChange = (index, field, value) => {
-    setSurgeons((prev) =>
+  const handleDoctorChange = (index, field, value) => {
+    setDoctors((prev) =>
       prev.map((s, i) => (i === index ? { ...s, [field]: value } : s))
     );
   };
@@ -70,8 +70,8 @@ export default function HospitalSetup() {
     }
 
     // basic validation
-    if (surgeons.some((s) => !s.name.trim() || !s.department.trim())) {
-      toast.error("Please fill surgeon name + department for all surgeons");
+    if (doctors.some((s) => !s.name.trim() || !s.department.trim())) {
+      toast.error("Please fill doctor name + department for all doctors");
       return;
     }
 
@@ -92,11 +92,11 @@ export default function HospitalSetup() {
         updatedAt: serverTimestamp(),
       });
 
-      // Save surgeons inside subcollection
-      for (const surgeon of surgeons) {
+      // Save doctors inside subcollection
+      for (const doctor of doctors) {
         await addDoc(collection(db, "hospitals", hospitalRef.id, "surgeons"), {
-          name: surgeon.name.trim(),
-          department: surgeon.department.trim(),
+          name: doctor.name.trim(),
+          department: doctor.department.trim(),
           createdAt: serverTimestamp(),
         });
       }
@@ -231,38 +231,38 @@ export default function HospitalSetup() {
           </div>
         </div>
 
-        {/* SURGEON SETUP */}
+        {/* DOCTOR SETUP */}
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-slate-900">Surgeon Setup</h2>
+          <h2 className="text-lg font-bold text-slate-900">Doctor Setup</h2>
 
           <div>
             <label className="block text-sm font-semibold text-slate-600 mb-1">
-              Number of Surgeons
+              Number of Doctors
             </label>
             <input
               type="number"
               min={1}
-              value={numSurgeons}
-              onChange={handleNumSurgeonsChange}
+              value={numDoctors}
+              onChange={handleNumDoctorsChange}
               className="w-full border border-slate-300 rounded-lg px-4 py-2"
             />
           </div>
 
           <div className="space-y-4">
-            {surgeons.map((s, index) => (
+            {doctors.map((s, index) => (
               <div
                 key={index}
                 className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50"
               >
                 <div>
                   <label className="block text-sm font-semibold text-slate-600 mb-1">
-                    Surgeon Name
+                    Doctor Name
                   </label>
                   <input
                     type="text"
                     value={s.name}
                     onChange={(e) =>
-                      handleSurgeonChange(index, "name", e.target.value)
+                      handleDoctorChange(index, "name", e.target.value)
                     }
                     placeholder="Dr. Smith"
                     className="w-full border border-slate-300 rounded-lg px-3 py-2"
@@ -278,7 +278,7 @@ export default function HospitalSetup() {
                     type="text"
                     value={s.department}
                     onChange={(e) =>
-                      handleSurgeonChange(index, "department", e.target.value)
+                      handleDoctorChange(index, "department", e.target.value)
                     }
                     placeholder="Cardiology"
                     className="w-full border border-slate-300 rounded-lg px-3 py-2"

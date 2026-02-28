@@ -19,7 +19,7 @@ const OptimizedSchedule = ({ data }) => {
       // Convert time strings (HH:MM) to comparable numbers
       const timeA = a.optimized_start.split(':').map(Number);
       const timeB = b.optimized_start.split(':').map(Number);
-      
+
       // Compare hours first, then minutes
       if (timeA[0] !== timeB[0]) {
         return timeA[0] - timeB[0];
@@ -55,7 +55,7 @@ const OptimizedSchedule = ({ data }) => {
                 })}
               </span>
               <span className="ml-auto text-xs text-slate-500 font-medium">
-                {groupedByDate[date].length} {groupedByDate[date].length === 1 ? 'surgery' : 'surgeries'}
+                {groupedByDate[date].length} {groupedByDate[date].length === 1 ? 'appointment' : 'appointments'}
               </span>
             </div>
           </div>

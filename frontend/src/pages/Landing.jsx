@@ -56,7 +56,7 @@ export default function LandingPage() {
           />
           <FeatureCard
             icon={<CalendarClock />}
-            title="Surgical Scheduling"
+            title="Appointment Scheduling"
             text="AI-optimized OR schedules that reduce wait time and idle hours."
           />
           <FeatureCard

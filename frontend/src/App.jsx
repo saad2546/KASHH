@@ -10,9 +10,10 @@ import Dashboard from "./pages/Dashboard";
 import PatientFlow from "./pages/PatientFlow";
 import SurgicalScheduling from "./pages/SurgicalScheduling";
 import PharamcyInventory from "./pages/PharmacyInventory";
+import DoctorDashboard from "./pages/DoctorDashboard";
 import ProtectedRoutes from "./routes/ProtectedRoutes";
-import RequireHospital from "./routes/RequireHospital"; 
-import AppRedirect from "./pages/AppRedirect"; 
+import RequireHospital from "./routes/RequireHospital";
+import AppRedirect from "./pages/AppRedirect";
 import { HospitalProvider } from "./context/HospitalContext";
 
 
@@ -58,8 +59,16 @@ function App() {
               </RequireHospital>
             }
           />
+          <Route
+            path="/doctor-dashboard"
+            element={
+              <RequireHospital>
+                <DoctorDashboard />
+              </RequireHospital>
+            }
+          />
 
-           <Route
+          <Route
             path="/patient-flow"
             element={
               <RequireHospital>

@@ -39,22 +39,58 @@ const SurgicalScheduling = () => {
   const { hospital, loading } = useHospital();
 
   const [pendingSurgeries, setPendingSurgeries] = useState([]);
+  const [mobileSurgeries, setMobileSurgeries] = useState([]);
   const [optimizedData, setOptimizedData] = useState([]);
 
-  const pendingCount = pendingSurgeries.length;
+  // Combine Firestore and Mobile bookings
+  const allSurgeries = useMemo(() => {
+    // Avoid duplicates if any
+    const mobileMapped = mobileSurgeries.map(s => ({
+      ...s,
+      id: s.token_number || s.id,
+      patient: s.patient_name,
+      surgeon: s.doctor_name,
+      isMobile: true
+    }));
 
-  const highPriorityCount = pendingSurgeries.filter(
-    (s) => (s.priority || "").toLowerCase() === "high"
+    return [...pendingSurgeries, ...mobileMapped].sort(
+      (a, b) => (b.priority_score || 0) - (a.priority_score || 0)
+    );
+  }, [pendingSurgeries, mobileSurgeries]);
+
+  const pendingCount = allSurgeries.length;
+
+  const urgentCount = allSurgeries.filter(
+    (s) => (s.priority_score || 0) >= 7
   ).length;
 
-  const totalQueueMinutes = pendingSurgeries.reduce(
-    (sum, s) => sum + Number(s.duration || 0),
-    0
-  );
+  const avgPriorityScore = pendingCount > 0
+    ? (allSurgeries.reduce((sum, s) => sum + (s.priority_score || 0), 0) / pendingCount).toFixed(1)
+    : "0.0";
 
-  const surgeonCount = new Set(pendingSurgeries.map((s) => s.surgeon)).size;
+  const doctorCount = new Set(allSurgeries.map((s) => s.surgeon)).size;
 
-  // Fetch pending surgery requests
+  // Poll Mobile Queue every 5 seconds
+  useEffect(() => {
+    if (loading || !hospital?.id) return;
+
+    const fetchMobileQueue = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/queue/get-all-queues`);
+        if (!res.ok) throw new Error("Failed to fetch");
+        const data = await res.json();
+        setMobileSurgeries(data.queue || []);
+      } catch (err) {
+        console.error("Mobile queue fetch error:", err);
+      }
+    };
+
+    fetchMobileQueue();
+    const interval = setInterval(fetchMobileQueue, 5000);
+    return () => clearInterval(interval);
+  }, [hospital?.id, loading, API_URL]);
+
+  // Fetch pending surgery requests from Firestore
   useEffect(() => {
     if (loading) return;
     if (!hospital?.id) return;
@@ -74,10 +110,13 @@ const SurgicalScheduling = () => {
             id: docSnap.id,
             patient: data.patient_name,
             surgeon: data.surgeon,
-            duration: Number(data.duration_minutes),
-            priority: data.priority || "Normal",
-            scheduled_start_time: data.scheduled_start_time,
-            scheduled_date: data.scheduled_date,
+            priority_score: Number(data.priority_score || 0),
+            urgency_score: Number(data.urgency_score || 0),
+            appointment_type: data.appointment_type || "",
+            is_emergency: Boolean(data.is_emergency),
+            scheduled_start_time: data.scheduled_start_time || "09:00",
+            scheduled_date: data.scheduled_date || "",
+            duration_minutes: data.duration_minutes || 60,
           };
         });
 
@@ -94,43 +133,62 @@ const SurgicalScheduling = () => {
 
   // Dynamic chart data from realtime pending surgeries
   const pendingLoadChartData = useMemo(() => {
-    const grouped = pendingSurgeries.reduce((acc, s) => {
+    const grouped = allSurgeries.reduce((acc, s) => {
       const day = s.scheduled_date || "No date";
       if (!acc[day]) {
-        acc[day] = { day, pending_cases: 0, pending_minutes: 0 };
+        acc[day] = { day, pending_cases: 0, total_score: 0 };
       }
       acc[day].pending_cases += 1;
-      acc[day].pending_minutes += Number(s.duration || 0);
+      acc[day].total_score += (s.priority_score || 0);
       return acc;
     }, {});
 
-    // sort by date if possible (YYYY-MM-DD)
-    return Object.values(grouped).sort((a, b) => {
-      if (a.day === "No date") return 1;
-      if (b.day === "No date") return -1;
-      return a.day.localeCompare(b.day);
-    });
-  }, [pendingSurgeries]);
+    return Object.values(grouped)
+      .map((d) => ({
+        ...d,
+        avg_priority: d.pending_cases > 0
+          ? Number((d.total_score / d.pending_cases).toFixed(1))
+          : 0,
+      }))
+      .sort((a, b) => {
+        if (a.day === "No date") return 1;
+        if (b.day === "No date") return -1;
+        return a.day.localeCompare(b.day);
+      });
+  }, [allSurgeries]);
 
 
-  // Run optimizer grouped by date 
+  // Run optimizer grouped by date
   const runOptimizer = async () => {
     if (!hospital?.id) {
       toast.error("Hospital not loaded");
       return;
     }
 
-    if (pendingSurgeries.length === 0) {
+    if (allSurgeries.length === 0) {
       toast.error("No surgeries to optimize");
       return;
     }
 
-    const groupedByDate = pendingSurgeries.reduce((acc, surgery) => {
-      const date = surgery.scheduled_date;
+    const groupedByDate = allSurgeries.reduce((acc, surgery) => {
+      const date = surgery.scheduled_date || "unscheduled";
       if (!acc[date]) acc[date] = [];
       acc[date].push(surgery);
       return acc;
     }, {});
+
+    // Warn and skip surgeries with no date
+    if (groupedByDate["unscheduled"]) {
+      toast.warning(
+        `${groupedByDate["unscheduled"].length} surgery(s) have no scheduled date and will be skipped`
+      );
+      delete groupedByDate["unscheduled"];
+    }
+
+    if (Object.keys(groupedByDate).length === 0) {
+      toast.error("No surgeries with a scheduled date to optimize");
+      return;
+    }
 
     const allOptimizedResults = [];
 
@@ -138,10 +196,10 @@ const SurgicalScheduling = () => {
       const payload = {
         surgeries: surgeries.map((s) => ({
           id: s.id,
-          patient_name: s.patient, 
-          surgeon: s.surgeon,
-          duration_minutes: s.duration,
-          scheduled_start_time: s.scheduled_start_time,
+          patient_name: s.patient || "Unknown Patient",
+          surgeon: s.surgeon || "Unknown Surgeon",
+          scheduled_start_time: s.scheduled_start_time || "09:00",
+          duration_minutes: s.duration_minutes || 60,
         })),
       };
 
@@ -177,11 +235,12 @@ const SurgicalScheduling = () => {
       }
     }
 
-    setOptimizedData(allOptimizedResults);
-
-    toast.success(
-      `Optimized ${Object.keys(groupedByDate).length} day(s) successfully`
-    );
+    if (allOptimizedResults.length > 0) {
+      setOptimizedData(allOptimizedResults);
+      toast.success(
+        `Optimized ${Object.keys(groupedByDate).length} day(s) successfully`
+      );
+    }
   };
 
   // Delete surgery from pending queue
@@ -218,7 +277,7 @@ const SurgicalScheduling = () => {
         <header className="flex justify-between items-end mt-10 mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-              Surgical Schedule{" "}
+              Patient Queue{" "}
               <span className="text-blue-600">Optimization</span>
             </h1>
 
@@ -240,30 +299,30 @@ const SurgicalScheduling = () => {
 
         {/* KPI GRID */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <MetricCard
-          title="Pending Backlog"
-          value={pendingCount}
-          subtext="Cases awaiting slot"
-        />
+          <MetricCard
+            title="Pending Backlog"
+            value={pendingCount}
+            subtext="Cases awaiting slot"
+          />
 
-        <MetricCard
-          title="High Priority Cases"
-          value={highPriorityCount}
-          subtext="Urgent surgeries in queue"
-        />
+          <MetricCard
+            title="Urgent Cases"
+            value={urgentCount}
+            subtext="Score ≥ 7.0 in queue"
+          />
 
-        <MetricCard
-          title="Workload (Minutes)"
-          value={`${totalQueueMinutes} min`}
-          subtext="Total pending duration"
-        />
+          <MetricCard
+            title="Avg Priority Score"
+            value={avgPriorityScore}
+            subtext="Weighted queue urgency"
+          />
 
-        <MetricCard
-          title="Surgeons Scheduled"
-          value={surgeonCount}
-          subtext="Unique surgeons in queue"
-        />
-      </div>
+          <MetricCard
+            title="Doctors Scheduled"
+            value={doctorCount}
+            subtext="Unique doctors in queue"
+          />
+        </div>
 
         {/* MAIN GRID */}
         <div className="grid grid-cols-12 gap-8 items-start">
@@ -272,7 +331,7 @@ const SurgicalScheduling = () => {
             <SurgeryForm />
 
             <PendingQueue
-              surgeries={pendingSurgeries}
+              surgeries={allSurgeries}
               onDelete={handleDeleteFromQueue}
             />
           </aside>
@@ -283,7 +342,7 @@ const SurgicalScheduling = () => {
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
               <div className="flex justify-between items-center px-6 py-4 bg-blue-50 border-b border-blue-100">
                 <span className="font-semibold text-blue-900">
-                  Optimized Surgical Timeline
+                  Optimized Appointment Timeline
                 </span>
 
                 <div className="flex gap-4 text-xs text-slate-500">
@@ -312,7 +371,7 @@ const SurgicalScheduling = () => {
                     </h3>
                   </div>
                   <p className="text-sm text-slate-500">
-                    Cases and workload (minutes) by scheduled date
+                    Cases and avg priority score by scheduled date
                   </p>
                 </div>
 
@@ -324,17 +383,17 @@ const SurgicalScheduling = () => {
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={pendingLoadChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  
+
                   <XAxis
                     dataKey="day"
                     tick={{ fill: "#64748b", fontSize: 12 }}
                   />
-                  
+
                   <YAxis
                     yAxisId="left"
                     tick={{ fill: "#64748b", fontSize: 12 }}
                   />
-                  
+
                   <YAxis
                     yAxisId="right"
                     orientation="right"
@@ -351,7 +410,7 @@ const SurgicalScheduling = () => {
                     }}
                     formatter={(val, name) => {
                       if (name === "pending_cases") return [`${val}`, "Pending Cases"];
-                      if (name === "pending_minutes") return [`${val} min`, "Pending Minutes"];
+                      if (name === "avg_priority") return [`${val}`, "Avg Priority Score"];
                       return [val, name];
                     }}
                   />
@@ -359,7 +418,7 @@ const SurgicalScheduling = () => {
                   <Legend
                     formatter={(val) => {
                       if (val === "pending_cases") return "Pending Cases";
-                      if (val === "pending_minutes") return "Pending Workload (min)";
+                      if (val === "avg_priority") return "Avg Priority Score";
                       return val;
                     }}
                   />
@@ -367,24 +426,23 @@ const SurgicalScheduling = () => {
                   <Bar
                     yAxisId="left"
                     dataKey="pending_cases"
-                    fill="#94a3b8"    
+                    fill="#94a3b8"
                     radius={[8, 8, 0, 0]}
                     name="pending_cases"
                   />
                   <Bar
                     yAxisId="right"
-                    dataKey="pending_minutes"
-                    fill="#2563eb"     
+                    dataKey="avg_priority"
+                    fill="#2563eb"
                     radius={[8, 8, 0, 0]}
-                    name="pending_minutes"
+                    name="avg_priority"
                   />
                 </BarChart>
               </ResponsiveContainer>
 
-              {/* Empty state */}
               {pendingLoadChartData.length === 0 && (
                 <div className="mt-4 text-center text-sm text-slate-500">
-                  No pending surgeries yet. Add requests to see the chart.
+                  No pending appointments yet. Add requests to see the chart.
                 </div>
               )}
             </div>

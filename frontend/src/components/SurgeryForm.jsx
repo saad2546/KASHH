@@ -1,25 +1,29 @@
 import React, { useEffect, useState } from "react";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, AlertTriangle } from "lucide-react";
 import { collection, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { db } from "@/firebase";
 import { toast } from "sonner";
 import { useHospital } from "@/context/HospitalContext";
 
 const SurgeryForm = () => {
+  const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const { hospital } = useHospital();
 
-  const [surgeons, setSurgeons] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     patientName: "",
-    surgeon: "",
-    duration: "",
+    doctor: "",
     scheduledDate: "",
     scheduledTime: "09:00",
-    priority: "Normal",
+    chiefComplaint: "",
+    appointmentType: "new",
+    age: "",
+    isEmergency: false,
   });
 
-  // Fetch surgeons
+  // Fetch doctors
   useEffect(() => {
     if (!hospital?.id) return;
 
@@ -31,13 +35,13 @@ const SurgeryForm = () => {
         ...d.data(),
       }));
 
-      setSurgeons(list);
+      setDoctors(list);
 
-      // auto select first surgeon if empty
-      if (!formData.surgeon && list.length > 0) {
+      // auto select first doctor if empty
+      if (!formData.doctor && list.length > 0) {
         setFormData((prev) => ({
           ...prev,
-          surgeon: `${list[0].name} (${list[0].department})`,
+          doctor: `${list[0].name} (${list[0].department})`,
         }));
       }
     });
@@ -46,7 +50,11 @@ const SurgeryForm = () => {
   }, [hospital?.id]);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value, type, checked } = e.target;
+    setFormData({
+      ...formData,
+      [name]: type === "checkbox" ? checked : value,
+    });
   };
 
   // Save request
@@ -58,32 +66,82 @@ const SurgeryForm = () => {
       return;
     }
 
-    await addDoc(collection(db, "hospitals", hospital.id, "surgery_requests"), {
-      patient_name: formData.patientName,
-      surgeon: formData.surgeon,
-      duration_minutes: Number(formData.duration),
-      scheduled_date: formData.scheduledDate,
-      scheduled_start_time: formData.scheduledTime,
-      priority: formData.priority,
-      status: "pending",
-      createdAt: serverTimestamp(),
-    });
+    if (!formData.chiefComplaint.trim()) {
+      toast.error("Please enter a chief complaint");
+      return;
+    }
 
-    toast.success("Surgery added to queue");
+    if (!formData.age || Number(formData.age) <= 0) {
+      toast.error("Please enter a valid age");
+      return;
+    }
 
-   setFormData({
-      patientName: "",
-      surgeon: "",
-      duration: "",
-      scheduledDate: "",
-      scheduledTime: "09:00",
-      priority: "Normal",
-    });
+    setSubmitting(true);
+
+    try {
+      // Call priority scoring API
+      const priorityRes = await fetch(`${API_URL}/api/calculate-priority`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chief_complaint: formData.chiefComplaint,
+          appointment_type: formData.appointmentType,
+          age: Number(formData.age),
+          is_emergency: formData.isEmergency,
+        }),
+      });
+
+      const priorityData = await priorityRes.json();
+
+      if (!priorityRes.ok) {
+        toast.error(priorityData.error || "Failed to calculate priority");
+        return;
+      }
+
+      // Save to Firestore with computed priority
+      await addDoc(
+        collection(db, "hospitals", hospital.id, "surgery_requests"),
+        {
+          patient_name: formData.patientName,
+          surgeon: formData.doctor,
+          scheduled_date: formData.scheduledDate,
+          scheduled_start_time: formData.scheduledTime,
+          chief_complaint: formData.chiefComplaint,
+          appointment_type: formData.appointmentType,
+          age: Number(formData.age),
+          is_emergency: formData.isEmergency,
+          priority_score: priorityData.priority_score,
+          urgency_score: priorityData.urgency_score,
+          status: "pending",
+          createdAt: serverTimestamp(),
+        }
+      );
+
+      toast.success(
+        `Added to queue — Priority Score: ${priorityData.priority_score}`
+      );
+
+      setFormData({
+        patientName: "",
+        doctor: "",
+        scheduledDate: "",
+        scheduledTime: "09:00",
+        chiefComplaint: "",
+        appointmentType: "new",
+        age: "",
+        isEmergency: false,
+      });
+    } catch (err) {
+      console.error("Submit error:", err);
+      toast.error("Failed to add to queue");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-      <h3 className="font-bold text-slate-800 mb-6">Add Surgery Request</h3>
+      <h3 className="font-bold text-slate-800 mb-6">Add Details</h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* PATIENT */}
@@ -102,39 +160,74 @@ const SurgeryForm = () => {
           />
         </div>
 
-        {/* SURGEON + DURATION */}
+        {/* DOCTOR */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Doctor
+          </label>
+          <select
+            name="doctor"
+            value={formData.doctor}
+            onChange={handleChange}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900"
+            required
+          >
+            <option value="">Select Doctor</option>
+            {doctors.map((s) => (
+              <option key={s.id} value={`${s.name} (${s.department})`}>
+                {s.name} ({s.department})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* CHIEF COMPLAINT */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
+            Chief Complaint
+          </label>
+          <input
+            type="text"
+            name="chiefComplaint"
+            value={formData.chiefComplaint}
+            onChange={handleChange}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="e.g. Severe stomach pain since morning"
+            required
+          />
+        </div>
+
+        {/* APPOINTMENT TYPE + AGE */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">
-              Surgeon
+              Appointment Type
             </label>
             <select
-              name="surgeon"
-              value={formData.surgeon}
+              name="appointmentType"
+              value={formData.appointmentType}
               onChange={handleChange}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900"
-              required
             >
-              <option value="">Select Surgeon</option>
-              {surgeons.map((s) => (
-                <option key={s.id} value={`${s.name} (${s.department})`}>
-                  {s.name} ({s.department})
-                </option>
-              ))}
+              <option value="new">🩺 New Consultation</option>
+              <option value="follow-up">🔁 Follow-up</option>
+              <option value="report">📄 Report Review</option>
             </select>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">
-              Duration (min)
+              Age
             </label>
             <input
               type="number"
-              name="duration"
-              value={formData.duration}
+              name="age"
+              value={formData.age}
               onChange={handleChange}
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900"
-              placeholder="60"
+              placeholder="e.g. 45"
+              min="0"
+              max="150"
               required
             />
           </div>
@@ -171,29 +264,32 @@ const SurgeryForm = () => {
           </div>
         </div>
 
-        {/* PRIORITY */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1">
-            Priority
-          </label>
-          <select
-            name="priority"
-            value={formData.priority}
+        {/* EMERGENCY TOGGLE */}
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-red-100 bg-red-50/50">
+          <input
+            type="checkbox"
+            name="isEmergency"
+            id="isEmergency"
+            checked={formData.isEmergency}
             onChange={handleChange}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-900"
+            className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
+          />
+          <label
+            htmlFor="isEmergency"
+            className="flex items-center gap-2 text-sm font-semibold text-red-700 cursor-pointer select-none"
           >
-            <option value="High">High</option>
-            <option value="Normal">Normal</option>
-            <option value="Elective">Elective</option>
-          </select>
+            <AlertTriangle size={14} />
+            This is an emergency
+          </label>
         </div>
 
         <button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition"
+          disabled={submitting}
+          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition disabled:opacity-60"
         >
           <PlusCircle size={18} />
-          Add to Queue
+          {submitting ? "Calculating Priority..." : "Add to Queue"}
         </button>
       </form>
     </div>
