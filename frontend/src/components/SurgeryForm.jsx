@@ -5,7 +5,7 @@ import { db } from "@/firebase";
 import { toast } from "sonner";
 import { useHospital } from "@/context/HospitalContext";
 
-const SurgeryForm = () => {
+const SurgeryForm = ({ onPatientAdded }) => {
   const API_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
   const { hospital } = useHospital();
 
@@ -99,7 +99,7 @@ const SurgeryForm = () => {
       }
 
       // Save to Firestore with computed priority
-      await addDoc(
+      const surgeryDoc = await addDoc(
         collection(db, "hospitals", hospital.id, "surgery_requests"),
         {
           patient_name: formData.patientName,
@@ -112,14 +112,43 @@ const SurgeryForm = () => {
           is_emergency: formData.isEmergency,
           priority_score: priorityData.priority_score,
           urgency_score: priorityData.urgency_score,
-          status: "pending",
+          status: "scheduled",
           createdAt: serverTimestamp(),
         }
       );
 
-      toast.success(
-        `Added to queue — Priority Score: ${priorityData.priority_score}`
-      );
+      // ALSO add to the Python backend's in-memory queue to trigger WebSocket updates
+      // Find the doctor object to get their name/id
+      const selectedDoctorDoc = doctors.find(d => `${d.name} (${d.department})` === formData.doctor);
+
+      try {
+        await fetch(`${API_URL}/api/queue/add-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            doctor_id: selectedDoctorDoc?.id || formData.doctor, // Fallback to label if no ID
+            doctor_name: selectedDoctorDoc?.name || formData.doctor.split(' (')[0],
+            patient_name: formData.patientName,
+            complaint: formData.chiefComplaint,
+            appointment_type: formData.appointmentType,
+            age: Number(formData.age),
+            is_emergency: formData.isEmergency,
+            priority_score: priorityData.priority_score,
+            urgency_score: priorityData.urgency_score,
+            id: surgeryDoc.id, // Keep them linked
+            hospital_id: hospital.id
+          }),
+        });
+      } catch (apiErr) {
+        console.warn("Failed to update real-time queue, but saved to Firestore:", apiErr);
+      }
+
+      toast.success(`Patient Added Successfully!`);
+
+      // 4. Trigger Auto-Optimization
+      if (onPatientAdded) {
+        onPatientAdded();
+      }
 
       setFormData({
         patientName: "",

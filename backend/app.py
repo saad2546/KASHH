@@ -12,9 +12,17 @@ from services.inventory import generate_inventory_insights
 from services.priority import calculate_priority
 from services.queue import add_patient_to_queue, get_queue, get_all_queues
 
+from controllers.medirx import medirx_bp
+from socket_ext import socketio
+
 load_dotenv()
 
 app = Flask(__name__)
+
+# Initialize SocketIO with this app instance
+socketio.init_app(app)
+
+app.register_blueprint(medirx_bp, url_prefix='/api')
 CORS(app, resources={
     r"/api/*": {
         "origins": [
@@ -57,4 +65,4 @@ def get_all_queues_controller():
     return get_all_queues()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    socketio.run(app, debug=True, host="0.0.0.0", port=5000)

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { io } from "socket.io-client";
 import { User, LogOut, CheckCircle, Clock } from "lucide-react";
 import { collection, onSnapshot, query, where, doc, updateDoc } from "firebase/firestore";
 import { getAuth, signOut } from "firebase/auth";
@@ -25,9 +26,12 @@ export default function DoctorDashboard() {
             isMobile: true
         }));
 
-        return [...firestoreQueue, ...mobileMapped].sort(
-            (a, b) => (b.priority_score || 0) - (a.priority_score || 0)
-        );
+        return [...firestoreQueue, ...mobileMapped].sort((a, b) => {
+            if (a.scheduled_start_time && b.scheduled_start_time) {
+                return a.scheduled_start_time.localeCompare(b.scheduled_start_time);
+            }
+            return (b.priority_score || 0) - (a.priority_score || 0);
+        });
     }, [firestoreQueue, mobileQueue]);
 
     // Poll Mobile Queue for this doctor every 5 seconds
@@ -38,7 +42,15 @@ export default function DoctorDashboard() {
 
         const fetchMobileQueue = async () => {
             try {
-                const res = await fetch(`${API_URL}/api/queue/get-queue/${doctorProfile.uid}`);
+                const auth = getAuth();
+                const user = auth.currentUser;
+                const token = user ? await user.getIdToken() : "";
+
+                const res = await fetch(`${API_URL}/api/queue/today?name=${encodeURIComponent(doctorProfile.name || "")}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 if (!res.ok) throw new Error("Failed to fetch");
                 const data = await res.json();
                 setMobileQueue(data.queue || []);
@@ -48,8 +60,29 @@ export default function DoctorDashboard() {
         };
 
         fetchMobileQueue();
-        const interval = setInterval(fetchMobileQueue, 5000);
-        return () => clearInterval(interval);
+
+        // Setup WebSocket connection for real-time updates
+        const socket = io(API_URL);
+
+        socket.on("connect", () => {
+            console.log("Connected to queue WebSocket");
+        });
+
+        socket.on("queue_updated", (data) => {
+            // Match by UID OR by Name (if the Admin used the name as id)
+            const isMatch = data.doctor_id === doctorProfile.uid ||
+                data.doctor_id === doctorProfile.name ||
+                data.doctor_name === doctorProfile.name;
+
+            if (isMatch) {
+                console.log("Received update for my queue:", data);
+                setMobileQueue(data.queue || []);
+            }
+        });
+
+        return () => {
+            socket.disconnect();
+        };
     }, [doctorProfile?.uid, loading, API_URL]);
 
     useEffect(() => {
@@ -59,7 +92,7 @@ export default function DoctorDashboard() {
         const q = query(
             collection(db, "hospitals", hospital.id, "surgery_requests"),
             where("surgeon", "==", doctorProfile.name),
-            where("status", "==", "pending")
+            where("status", "in", ["pending", "scheduled"])
         );
 
         const unsubscribe = onSnapshot(q, (snap) => {

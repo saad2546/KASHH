@@ -30,6 +30,7 @@ def add_patient_to_queue(request_obj):
         # Build patient entry
         patient_entry = {
             'token_number': token_number,
+            'id': data.get('id'), # Use existing Firestore ID if provided
             'patient_uid': data.get('patient_uid', ''),
             'patient_name': data.get('patient_name', 'Patient'),
             'patient_email': data.get('patient_email', ''),
@@ -46,6 +47,34 @@ def add_patient_to_queue(request_obj):
             'created_at': datetime.utcnow().isoformat(),
         }
 
+        # FIRESTORE PERSISTENCE (for mobile/backend-only bookings)
+        hospital_id = data.get('hospital_id')
+        if hospital_id and not patient_entry.get('id'):
+            try:
+                from middleware.auth import initialize_firebase
+                initialize_firebase()
+                from firebase_admin import firestore
+                db_fs = firestore.client()
+                doc_ref = db_fs.collection("hospitals").document(hospital_id).collection("surgery_requests").document()
+                patient_entry['id'] = doc_ref.id
+                doc_ref.set({
+                    'patient_name': patient_entry['patient_name'],
+                    'surgeon': patient_entry['doctor_name'],
+                    'chief_complaint': patient_entry['complaint'],
+                    'appointment_type': patient_entry['appointment_type'],
+                    'urgency_score': patient_entry['urgency_score'],
+                    'priority_score': patient_entry['priority_score'],
+                    'is_emergency': patient_entry['is_emergency'],
+                    'age': patient_entry['age'],
+                    'status': 'scheduled', # Bypass 'pending' approval flow
+                    'scheduled_start_time': '09:00',
+                    'scheduled_date': datetime.utcnow().strftime('%Y-%m-%d'),
+                    'createdAt': firestore.SERVER_TIMESTAMP
+                })
+                print(f"[QUEUE] Persisted mobile booking to Firestore: {patient_entry['id']}")
+            except Exception as fe:
+                print(f"[QUEUE] Firestore persistence failed: {fe}")
+
         # Insert and sort by priority_score DESCENDING
         doctor_queues[doctor_id].append(patient_entry)
         doctor_queues[doctor_id].sort(
@@ -61,10 +90,55 @@ def add_patient_to_queue(request_obj):
         # Estimate wait time (~7 mins per patient ahead)
         estimated_wait = f"~{queue_position * 7} mins"
 
+        from socket_ext import socketio
+        
+        queue_data = doctor_queues[doctor_id]
+        
+        # Broadcast to anyone listening for this doctor's queue (e.g., DoctorDashboard)
+        socketio.emit('queue_updated', {
+            'doctor_id': doctor_id, 
+            'doctor_name': data.get('doctor_name', ''),
+            'queue': queue_data
+        })
+        # Broadcast to all clients (e.g., Patient displays)
+        socketio.emit('all_queues_updated', {'timestamp': datetime.utcnow().isoformat()})
+
+        # TRIGGER AUTO-OPTIMIZATION
+        if hospital_id:
+            try:
+                from services.scheduling import run_optimization
+                from middleware.auth import initialize_firebase
+                initialize_firebase()
+                from firebase_admin import firestore
+                db_fs = firestore.client()
+                
+                # Fetch all scheduled surgeries for today to re-optimize
+                today_str = datetime.utcnow().strftime('%Y-%m-%d')
+                surgeries_ref = db_fs.collection("hospitals").document(hospital_id).collection("surgery_requests")
+                docs = surgeries_ref.where("scheduled_date", "==", today_str).where("status", "==", "scheduled").stream()
+                
+                surgeries_to_optimize = []
+                for doc in docs:
+                    d = doc.to_dict()
+                    surgeries_to_optimize.append({
+                        "id": doc.id,
+                        "patient_name": d.get("patient_name") or d.get("patient") or "Unknown",
+                        "surgeon": d.get("surgeon") or "Unknown",
+                        "scheduled_start_time": d.get("scheduled_start_time") or "09:00",
+                        "duration_minutes": d.get("duration_minutes") or 60
+                    })
+                
+                if surgeries_to_optimize:
+                    print(f"[QUEUE] Triggering auto-optimization for {len(surgeries_to_optimize)} surgeries")
+                    run_optimization(surgeries_to_optimize, hospital_id)
+            except Exception as oe:
+                print(f"[QUEUE] Auto-optimization trigger failed: {oe}")
+
         return jsonify({
             'token_number': token_number,
             'queue_position': queue_position,
             'estimated_wait': estimated_wait,
+            'id': patient_entry.get('id')
         }), 201
 
     except Exception as e:

@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { io } from "socket.io-client";
 import {
   RefreshCcw,
-  BrainCircuit,
-  LayoutDashboard,
   TrendingUp,
-  Clock,
 } from "lucide-react";
 import {
   BarChart,
@@ -29,7 +27,6 @@ import { toast } from "sonner";
 
 import MetricCard from "../components/MetricCard";
 import SurgeryForm from "../components/SurgeryForm";
-import PendingQueue from "../components/PendingQueue";
 import OptimizedSchedule from "../components/OptimizedSchedule";
 
 import { useHospital } from "@/context/HospitalContext";
@@ -44,7 +41,6 @@ const SurgicalScheduling = () => {
 
   // Combine Firestore and Mobile bookings
   const allSurgeries = useMemo(() => {
-    // Avoid duplicates if any
     const mobileMapped = mobileSurgeries.map(s => ({
       ...s,
       id: s.token_number || s.id,
@@ -57,6 +53,21 @@ const SurgicalScheduling = () => {
       (a, b) => (b.priority_score || 0) - (a.priority_score || 0)
     );
   }, [pendingSurgeries, mobileSurgeries]);
+
+  // Derived optimized data for the timeline (persists on refresh)
+  const displayedOptimizedData = useMemo(() => {
+    if (optimizedData.length > 0) return optimizedData;
+
+    return allSurgeries
+      .map(s => ({
+        id: s.id,
+        patient: s.patient,
+        surgeon: s.surgeon,
+        optimized_start: s.scheduled_start_time || "09:00",
+        room: s.room_number || 1,
+        date: s.scheduled_date
+      }));
+  }, [optimizedData, allSurgeries]);
 
   const pendingCount = allSurgeries.length;
 
@@ -86,8 +97,19 @@ const SurgicalScheduling = () => {
     };
 
     fetchMobileQueue();
-    const interval = setInterval(fetchMobileQueue, 5000);
-    return () => clearInterval(interval);
+
+    // Subscribe to WebSocket events instead of polling
+    const socket = io(API_URL);
+
+    socket.on("all_queues_updated", () => {
+      fetchMobileQueue();
+    });
+
+    socket.on("queue_updated", () => {
+      fetchMobileQueue();
+    });
+
+    return () => socket.disconnect();
   }, [hospital?.id, loading, API_URL]);
 
   // Fetch pending surgery requests from Firestore
@@ -97,7 +119,7 @@ const SurgicalScheduling = () => {
 
     const q = query(
       collection(db, "hospitals", hospital.id, "surgery_requests"),
-      where("status", "==", "pending")
+      where("status", "==", "scheduled")
     );
 
     const unsubscribe = onSnapshot(
@@ -194,6 +216,7 @@ const SurgicalScheduling = () => {
 
     for (const [date, surgeries] of Object.entries(groupedByDate)) {
       const payload = {
+        hospital_id: hospital.id,
         surgeries: surgeries.map((s) => ({
           id: s.id,
           patient_name: s.patient || "Unknown Patient",
@@ -223,6 +246,10 @@ const SurgicalScheduling = () => {
           continue;
         }
 
+        if (data.warning) {
+          toast.warning(data.warning);
+        }
+
         const resultsWithDate = (data.optimized_schedule || []).map((item) => ({
           ...item,
           date,
@@ -240,24 +267,6 @@ const SurgicalScheduling = () => {
       toast.success(
         `Optimized ${Object.keys(groupedByDate).length} day(s) successfully`
       );
-    }
-  };
-
-  // Delete surgery from pending queue
-  const handleDeleteFromQueue = async (id) => {
-    if (!hospital?.id) {
-      toast.error("Hospital not loaded");
-      return;
-    }
-
-    try {
-      await deleteDoc(
-        doc(db, "hospitals", hospital.id, "surgery_requests", id)
-      );
-      toast.success("Removed from queue");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to delete request");
     }
   };
 
@@ -328,12 +337,7 @@ const SurgicalScheduling = () => {
         <div className="grid grid-cols-12 gap-8 items-start">
           {/* LEFT COLUMN */}
           <aside className="col-span-12 lg:col-span-4 flex flex-col gap-8">
-            <SurgeryForm />
-
-            <PendingQueue
-              surgeries={allSurgeries}
-              onDelete={handleDeleteFromQueue}
-            />
+            <SurgeryForm onPatientAdded={runOptimizer} />
           </aside>
 
           {/* RIGHT COLUMN */}
@@ -357,7 +361,7 @@ const SurgicalScheduling = () => {
                 </div>
               </div>
 
-              <OptimizedSchedule data={optimizedData} />
+              <OptimizedSchedule data={displayedOptimizedData} />
             </div>
 
             {/* DYNAMIC PERFORMANCE CHART */}

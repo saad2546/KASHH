@@ -1,5 +1,5 @@
 import "./App.css";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import Navbar from "./components/Navbar";
 import LandingPage from "./pages/Landing";
@@ -16,86 +16,120 @@ import RequireHospital from "./routes/RequireHospital";
 import AppRedirect from "./pages/AppRedirect";
 import { HospitalProvider } from "./context/HospitalContext";
 
+// DOCTOR-PAGE IMPORTS
+import { AuthProvider } from './context/AuthContext';
+import { ProtectedRoute } from './components/Auth/ProtectedRoute';
+import DoctorLogin from './pages/DoctorLogin';
+import MediRxDashboard from './pages/MediRxDashboard';
+import NewPrescription from './pages/NewPrescription';
+import { Navbar as DoctorNavbar } from './components/common/Navbar';
+
+function NavHeader() {
+  const location = useLocation();
+  const isDoctorRoute = location.pathname.startsWith('/doctor');
+  return isDoctorRoute ? <DoctorNavbar /> : <Navbar />;
+}
 
 function App() {
   return (
     <HospitalProvider>
-      <Router>
-        <Navbar />
-        <Toaster richColors position="bottom-right" />
+      <AuthProvider>
+        <Router>
+          <NavHeader />
+          <Toaster richColors position="bottom-right" />
 
-        <Routes>
-          {/* PUBLIC ROUTES */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Routes>
+            {/* PUBLIC ROUTES */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* AUTH ENTRY POINT */}
-          <Route
-            path="/app"
-            element={
-              <ProtectedRoutes>
-                <AppRedirect />
-              </ProtectedRoutes>
-            }
-          />
+            {/* AUTH ENTRY POINT */}
+            <Route
+              path="/app"
+              element={
+                <ProtectedRoutes>
+                  <AppRedirect />
+                </ProtectedRoutes>
+              }
+            />
 
-          {/* SETUP (auth only) */}
-          <Route
-            path="/setup-hospital"
-            element={
-              <ProtectedRoutes>
-                <HospitalSetup />
-              </ProtectedRoutes>
-            }
-          />
+            {/* SETUP (auth only) */}
+            <Route
+              path="/setup-hospital"
+              element={
+                <ProtectedRoutes>
+                  <HospitalSetup />
+                </ProtectedRoutes>
+              }
+            />
 
-          {/* HOSPITAL PROTECTED ROUTES */}
-          <Route
-            path="/dashboard"
-            element={
-              <RequireHospital>
-                <Dashboard />
-              </RequireHospital>
-            }
-          />
-          <Route
-            path="/doctor-dashboard"
-            element={
-              <RequireHospital>
-                <DoctorDashboard />
-              </RequireHospital>
-            }
-          />
+            {/* HOSPITAL PROTECTED ROUTES */}
+            <Route
+              path="/dashboard"
+              element={
+                <RequireHospital>
+                  <Dashboard />
+                </RequireHospital>
+              }
+            />
+            <Route
+              path="/doctor-dashboard"
+              element={
+                <RequireHospital>
+                  <DoctorDashboard />
+                </RequireHospital>
+              }
+            />
 
-          <Route
-            path="/patient-flow"
-            element={
-              <RequireHospital>
-                <PatientFlow />
-              </RequireHospital>
-            }
-          />
+            <Route
+              path="/patient-flow"
+              element={
+                <RequireHospital>
+                  <PatientFlow />
+                </RequireHospital>
+              }
+            />
 
-          <Route
-            path="/scheduling"
-            element={
-              <RequireHospital>
-                <SurgicalScheduling />
-              </RequireHospital>
-            }
-          />
+            <Route
+              path="/scheduling"
+              element={
+                <RequireHospital>
+                  <SurgicalScheduling />
+                </RequireHospital>
+              }
+            />
 
-          <Route
-            path="/inventory"
-            element={
-              <RequireHospital>
-                <PharamcyInventory />
-              </RequireHospital>
-            }
-          />
-        </Routes>
-      </Router>
+            <Route
+              path="/inventory"
+              element={
+                <RequireHospital>
+                  <PharamcyInventory />
+                </RequireHospital>
+              }
+            />
+
+            {/* MEDIRX DOCTOR ROUTES */}
+            <Route path="/doctor/login" element={<DoctorLogin />} />
+            <Route
+              path="/doctor/dashboard"
+              element={
+                <ProtectedRoute>
+                  <MediRxDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/doctor/prescriptions/new"
+              element={
+                <ProtectedRoute>
+                  <NewPrescription />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </Router>
+      </AuthProvider>
     </HospitalProvider>
   );
 }
